@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="MHMC-SuperComputer02" autoUploadExternalChanges="true">
+    <serverData>
+      <paths name="MHMC-SuperComputer01">
+        <serverdata>
+          <mappings>
+            <mapping local="$PROJECT_DIR$/../../src/fairseq" web="/" />
+            <mapping local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+      <paths name="MHMC-SuperComputer02">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/datatank/aliaw_data/project/nlp/" local="$PROJECT_DIR$" />
+          </mappings>
+          <excludedPaths>
+            <excludedPath local="true" path="$PROJECT_DIR$/workspace/" />
+            <excludedPath path="/datatank/aliaw_data/project/nlp/workspace/" />
+          </excludedPaths>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

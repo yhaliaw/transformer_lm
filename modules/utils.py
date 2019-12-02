@@ -95,9 +95,9 @@ class TiedLinear(nn.Module):
             init.constant_(self.in_bias, 0.)
             init.constant_(self.out_bias, 0.)
 
-    def forward(self, x, transposed=False):
-        weight = self.weight if not transposed else self.weight.t()
-        bias = self.out_bias if not transposed else self.in_bias
+    def forward(self, x, transpose=False):
+        weight = self.weight if not transpose else self.weight.t()
+        bias = self.out_bias if not transpose else self.in_bias
         return F.linear(x, weight, bias)
 
     def extra_repr(self):

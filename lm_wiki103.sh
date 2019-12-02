@@ -9,7 +9,7 @@ if [ "$1" == "train" ]; then
     --train wiki.train.tokens --valid wiki.valid.tokens \
     --path workspace/wiki103 --tensorboard \
     --task lm --context-type file \
-    --context-size 0 --train-token 1024 --max-token 3072 \
+    --context-size 0 --train-token 1024 --max-token 4096 \
     --eval-context-size 1024 --eval-token 1024 --eval-max-token 2048 \
     --update-freq 4 \
     --optim adam --adam-betas 0.9 0.999 --lr 0.00025 \

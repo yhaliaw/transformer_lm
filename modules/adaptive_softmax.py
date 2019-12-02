@@ -57,36 +57,41 @@ class AdaptiveSoftmax(nn.Module):
 
     def forward(self, x, target):
         """Calculate the sum negative log likelihood of targets."""
-        # x, target can be batch first or sequence first
-        x = x.reshape(-1, self.input_dim)
+        x = x.reshape(-1, self.embed_dim)
         x = F.dropout(x, self.dropout, training=self.training)
-        target = target.reshape(-1)
-        nll = 0
-        # Get log prob of a cluster each loop
-        for i in range(len(self.cutoff) - 1):
-            mask = (self.cutoff[i] <= target) & (target < self.cutoff[i + 1])
-            if self.padding_idx is not None:
-                mask = mask & (target != self.padding_idx)
-            if not mask.any():
-                continue
-            idx = mask.nonzero().view(-1)
-            target_idx = target[idx] - self.cutoff[i]
-            hidden = x[idx, :]
-            head = self.linear[0](hidden, linear=True)
-            cluster = self.cluster(hidden)
-            head_log_prob = F.log_softmax(torch.cat((head, cluster), dim=-1), dim=-1, dtype=torch.float32)
-            if i == 0:
-                log_prob = head_log_prob.gather(1, target_idx[:, None]).view(-1)
-                nll += -log_prob.sum()
+        target = target.view(-1)
+        loss = torch.zeros(1, dtype=torch.float32, device=x.device)
+
+        new_target = [target.clone()]
+        target_idx = []
+        for i in range(1, len(self.cutoff) - 1):
+            mask = target.ge(self.cutoff[i]).mul(target.lt(self.cutoff[i + 1]))
+            new_target[0][mask] = self.cutoff[1] + i - 1
+
+            if mask.any():
+                target_idx.append(mask.nonzero().squeeze(1))
+                new_target.append(target[mask].add(-self.cutoff[i]))
             else:
-                prior = head_log_prob[:, self.cutoff[1] - 1 + i]
-                proj = self.projection[i](hidden, transposed=True)
-                proj = F.dropout(proj, self.dropout, training=self.training)
-                logit = self.linear[i](proj, linear=True)
-                tail_log_prob = prior[:, None] + F.log_softmax(logit, dim=-1, dtype=torch.float32)
-                log_prob = tail_log_prob.gather(1, target_idx[:, None]).view(-1)
-                nll += -log_prob.sum()
-        return nll
+                target_idx.append(None)
+                new_target.append(None)
+
+        head = torch.cat((self.linear[0](x, linear=True), self.cluster(x)), dim=-1)
+        logit = [head]
+        for i in range(len(target_idx)):
+            if target_idx[i] is not None:
+                tail = self.projection[i + 1](x.index_select(0, target_idx[i]), transpose=True)
+                tail = F.dropout(tail, self.dropout, training=self.training)
+                tail = self.linear[i + 1](tail, linear=True)
+                logit.append(tail)
+            else:
+                logit.append(None)
+
+        for i in range(len(new_target)):
+            if new_target[i] is not None:
+                loss += F.cross_entropy(logit[i], new_target[i], ignore_index=self.padding_idx,
+                                        reduction='sum')
+
+        return loss
 
     def log_prob(self, x):
         """Calculate the log prob of all vocab."""
@@ -106,7 +111,7 @@ class AdaptiveSoftmax(nn.Module):
         # Tail cluster
         for i in range(1, len(self.cutoff) - 1):
             prior = head_log_prob[:, self.cutoff[1] + i - 1]
-            proj = self.projection[i](x, transposed=True)
+            proj = self.projection[i](x, transpose=True)
             proj = F.dropout(proj, self.dropout, training=self.training)
             logit = self.linear[i](proj, linear=True)
             tail_log_prob = prior[:, None] + F.log_softmax(logit, dim=-1, dtype=torch.float32)

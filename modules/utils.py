@@ -3,7 +3,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.nn.init as init
 from torch.nn.parameter import Parameter
 
 
@@ -33,9 +32,9 @@ class Linear(nn.Module):
         return F.linear(x, self.weight, self.bias)
 
     def reset_parameters(self):
-        init.xavier_uniform_(self.weight)
+        nn.init.xavier_uniform_(self.weight)
         if self.bias is not None:
-            init.constant_(self.bias, 0.)
+            nn.init.constant_(self.bias, 0.)
 
     def extra_repr(self):
         return f"{self.in_features}, {self.out_features}, bias={self.bias is not None}"
@@ -90,10 +89,10 @@ class TiedLinear(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        init.xavier_uniform_(self.weight)
+        nn.init.xavier_uniform_(self.weight)
         if self.bias:
-            init.constant_(self.in_bias, 0.)
-            init.constant_(self.out_bias, 0.)
+            nn.init.constant_(self.in_bias, 0.)
+            nn.init.constant_(self.out_bias, 0.)
 
     def forward(self, x, transpose=False):
         weight = self.weight if not transpose else self.weight.t()
@@ -131,14 +130,14 @@ class TiedEmbedding(nn.Module):
 
     def reset_parameters(self):
         if self.embed_init:
-            init.normal_(self.weight, mean=0, std=self.embedding_dim ** -0.5)
+            nn.init.normal_(self.weight, mean=0, std=self.embedding_dim ** -0.5)
             if self.padding_idx is not None:
                 with torch.no_grad():
                     self.weight[self.padding_idx].fill_(0)
         else:
-            init.xavier_uniform_(self.weight)
+            nn.init.xavier_uniform_(self.weight)
         if self.linear_bias is not None:
-            init.constant_(self.linear_bias, 0.)
+            nn.init.constant_(self.linear_bias, 0.)
 
     def forward(self, x, linear=False):
         return F.linear(x, self.weight) if linear else \

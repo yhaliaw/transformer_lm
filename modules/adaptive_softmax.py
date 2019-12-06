@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.utils import Linear, TiedLinear, TiedEmbedding
+from .utils import Linear, TiedLinear, TiedEmbedding
 
 
 class AdaptiveSoftmax(nn.Module):
@@ -42,31 +42,34 @@ class AdaptiveSoftmax(nn.Module):
         self.bias = bias
         self.input_dim = input_dim
 
+        # Convert padding_idx
+        self.ignore_cluster = -1
+        if self.padding_idx is not None:
+            for i in range(len(self.cutoff) - 1):
+                if self.cutoff[i] <= self.padding_idx < self.cutoff[i + 1]:
+                    self.ignore_cluster = i
+                    self.ignore_idx = padding_idx - self.cutoff[i]
+
         # Parameters
         self.projection = nn.ModuleList()
         self.linear = nn.ModuleList()
         self.cluster = Linear(embed_dim, len(self.cutoff) - 2, bias=bias)
         # TransposedEmbedding and TransposedLinear allows for tied
         # projection and embedding.
-        for i in range(0, len(self.cutoff) - 1):
+        for i in range(len(self.cutoff) - 1):
             size = self.cutoff[i + 1] - self.cutoff[i]
             dim = embed_dim // (factor ** i)
             assert dim > 0, "Invalid factor for adaptive softmax."
             self.projection.append(TiedLinear(dim, input_dim, bias) if input_dim != dim else None)
             self.linear.append(TiedEmbedding(size, dim, bias=bias, embed_init=False))
 
-    def forward(self, x, target):
-        """Calculate the sum negative log likelihood of targets."""
-        x = x.reshape(-1, self.embed_dim)
-        x = F.dropout(x, self.dropout, training=self.training)
-        target = target.view(-1)
-        loss = torch.zeros(1, dtype=torch.float32, device=x.device)
-
+    def convert_target(self, target):
         new_target = [target.clone()]
         target_idx = []
+
         for i in range(1, len(self.cutoff) - 1):
             mask = target.ge(self.cutoff[i]).mul(target.lt(self.cutoff[i + 1]))
-            new_target[0][mask] = self.cutoff[1] + i - 1
+            new_target[0][mask] = self.cutoff[0] + i - 1
 
             if mask.any():
                 target_idx.append(mask.nonzero().squeeze(1))
@@ -75,21 +78,41 @@ class AdaptiveSoftmax(nn.Module):
                 target_idx.append(None)
                 new_target.append(None)
 
+        return new_target, target_idx
+
+    def get_logit(self, x, idx):
         head = torch.cat((self.linear[0](x, linear=True), self.cluster(x)), dim=-1)
         logit = [head]
-        for i in range(len(target_idx)):
-            if target_idx[i] is not None:
-                tail = self.projection[i + 1](x.index_select(0, target_idx[i]), transpose=True)
+        for i in range(len(idx)):
+            if idx[i] is not None:
+                tail = self.projection[i + 1](x.index_select(0, idx[i]), transpose=True)
                 tail = F.dropout(tail, self.dropout, training=self.training)
                 tail = self.linear[i + 1](tail, linear=True)
                 logit.append(tail)
             else:
                 logit.append(None)
+        return logit
 
-        for i in range(len(new_target)):
-            if new_target[i] is not None:
-                loss += F.cross_entropy(logit[i], new_target[i], ignore_index=self.padding_idx,
-                                        reduction='sum')
+    def get_loss(self, logit, target):
+        loss = torch.zeros(1, dtype=torch.float32, device=logit[0].device)
+        for i in range(len(target)):
+            if target[i] is not None:
+                if i == self.ignore_cluster:
+                    loss += F.cross_entropy(logit[i], target[i], ignore_index=self.ignore_idx,
+                                            reduction='sum')
+                else:
+                    loss += F.cross_entropy(logit[i], target[i], reduction='sum')
+        return loss
+
+    def forward(self, x, target):
+        """Calculate the sum negative log likelihood of targets."""
+        x = x.reshape(-1, self.embed_dim)
+        x = F.dropout(x, self.dropout, training=self.training)
+        target = target.view(-1)
+
+        converted_target, idx = self.convert_target(target)
+        logit = self.get_logit(x, idx)
+        loss = self.get_loss(logit, converted_target)
 
         return loss
 
@@ -133,8 +156,10 @@ if __name__ == '__main__':
     tgt = torch.LongTensor(50, 10).random_(0, vocab_size - 1)
     tgt[5, 3] = padding_idx
 
-    adapt = AdaptiveSoftmax(vocab_size, embed_dim, cutoff, factor=4, padding_idx=padding_idx, dropout=0.,
-                 bias=False, input_dim=None)
+    adapt = AdaptiveSoftmax(
+        vocab_size, embed_dim, cutoff, factor=4, padding_idx=padding_idx, dropout=0., bias=False,
+        input_dim=None
+    )
     fair_adapt = FairseqAdaptiveSoftmax(vocab_size, embed_dim, cutoff, dropout=0., factor=4.,
                                         adaptive_inputs=None, tie_proj=False)
 

@@ -2,6 +2,7 @@
 
 import os
 import sys
+import math
 
 from tqdm import tqdm
 import numpy as np
@@ -88,14 +89,16 @@ def main():
         print("|  Evaluating model on validation data...")
         valid_loader = get_eval_loader(corpus.valid, corpus.vocab, args)
         loss = evaluate(valid_loader)
+        loss = loss / math.log(2)
         print(f"|  valid loss: {loss:.4f}")
-        print(f"\n== Valid perplexity: {np.exp(loss):.4f} ==\n")
+        print(f"\n== Valid perplexity: {np.square(loss):.4f} ==\n")
 
     print("|  Evaluating model on test data...")
     test_loader = get_eval_loader(corpus.test, corpus.vocab, args)
     loss = evaluate(test_loader)
+    loss = loss / math.log(2)
     print(f"|  test loss: {loss:.4f}")
-    print(f"\n== Test perplexity: {np.exp(loss):.4f} ==\n")
+    print(f"\n== Test perplexity: {np.sqaure(loss):.4f} ==\n")
 
 
 def valid_options(args):

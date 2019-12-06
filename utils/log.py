@@ -57,9 +57,10 @@ class Logger(object):
             self.valid_writer.add_text(tag, text_string, global_step, walltime)
 
     def valid(self, loss, step, epoch):
+        loss = loss / math.log(2)
         self.valid_add_scalar('loss', loss, step)
         self.log(f"|  Validation at {epoch} epoch, {step} step, loss: {loss:.4f}"
-                 f", perplexity: {np.exp(loss):.4f}")
+                 f", perplexity: {np.square(loss):.4f}")
 
     def train_add_scalar(self, tag, scalar_value, global_step=None, walltime=None):
         if self.rank == 0 and self.tensorboard:
@@ -77,7 +78,8 @@ class Logger(object):
         end_time = time.time()
         num_step = step - self.last_step
 
-        loss = self.loss / self.num_target
+        loss = self.loss / self.num_target / math.log(2)
+        perplexity = np.square(loss)
         norm = self.norm / num_step
         clip_norm = self.clip_norm / num_step
         time_per_step = (end_time - self.time) / num_step
@@ -99,7 +101,7 @@ class Logger(object):
                      f"time: {time_per_step:.2f}, tkn/s: {token_per_sec:.2f}, " \
                      f"norm: {norm:.2f}, " \
                      f"lr: {lr:.9f}, scale: 2^{math.log(loss_scale, 2):.0f}, " \
-                     f"loss: {loss:.4f} ppl: {np.exp(loss):.4f}"
+                     f"loss: {loss:.4f} ppl: {perplexity:.4f}"
             self.progress_bar.set_postfix_str(string, refresh=False)
             self.progress_bar.update(self.num_target)
 
@@ -122,7 +124,8 @@ class Logger(object):
         if self.rank == 0:
             self.progress_bar.close()
 
-        loss = self.epoch_loss / self.epoch_num_target
+        loss = self.epoch_loss / self.epoch_num_target / math.log(2)
+        perplexity = np.square(loss)
         time_per_step = self.epoch_time / self.epoch_num_step
         token_per_step = self.epoch_num_target / self.epoch_num_step
         token_per_sec = self.epoch_num_target / self.epoch_time
@@ -133,7 +136,7 @@ class Logger(object):
                  f"size: {batch_size:.2f}, token: {token_per_step:.2f}, " \
                  f"time: {time_per_step:.2f}, tkn/s: {token_per_sec:.2f}, " \
                  f"clip: {clip_ratio:.2f}, " \
-                 f"loss: {loss:.4f} ppl: {np.exp(loss):.4f}"
+                 f"loss: {loss:.4f} ppl: {perplexity:.4f}"
         print(string, flush=True)
 
     def init_epoch(self, step, epoch, total):

@@ -65,7 +65,7 @@ class ConstituentAttention(nn.Module):
         neighbor_attn = F.softmax(score, dim=-1)
         # formula 7
         neighbor_attn = neighbor_attn * neighbor_attn.transpose(-2, -1) + 1e-9
-        neighbor_attn = neighbor_attn
+        neighbor_attn = neighbor_attn.sqrt()
         # hierarchical constraint
         neighbor_attn = prior + (1 - prior) * neighbor_attn
 
@@ -81,7 +81,7 @@ class ConstituentAttention(nn.Module):
         # Copy to lower half.
         c_attn = c_attn + c_attn.transpose(-2, -1) + neighbor_attn.masked_fill(diag == 0, 1e-9)
 
-        return c_attn, neighbor_attn
+        return c_attn, neighbor_attn, neighbor_attn
 
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.proj_weight)
@@ -129,28 +129,28 @@ class GroupAttention(nn.Module):
         g_attn = tri_matrix.matmul(t).exp().masked_fill((tri_matrix.int() - b) == 0, 0)
         g_attn = g_attn + g_attn.transpose(-2, -1) + neibor_attn.masked_fill(b == 0, 1e-9)
 
-        return g_attn, neibor_attn
+        return g_attn, neibor_attn, neibor_attn
 
 
 # TODO replace with unit test
 if __name__ == '__main__':
     # 5 batch, 10 seq, 512 dim
-    x = torch.normal(mean=0., std=1., size=(5, 10, 512))
+    x = torch.normal(mean=0., std=1., size=(5, 10, 256))
     mask = torch.ones((5, 10), dtype=torch.int)
     mask[:, 7:] = 0
     mask = mask[:, None, :]
     prior = torch.zeros(1)
 
-    group_attn = GroupAttention(512)  # Official implementation
-    constituent_attn = ConstituentAttention(512, 512)
+    group_attn = GroupAttention(256)  # Official implementation
+    constituent_attn = ConstituentAttention(256, 256)
 
-    constituent_attn.proj_weight = Parameter(torch.cat((group_attn.linear_key.weight.t(), group_attn.linear_query.weight.t()), dim=0))
-    constituent_attn.proj_bias = Parameter(torch.cat((group_attn.linear_key.bias.t(), group_attn.linear_query.bias.t()), dim=0))
+    group_attn.linear_query.weight, group_attn.linear_key.weight = [nn.Parameter(i) for i in constituent_attn.proj_weight.chunk(2, dim=0)]
+    group_attn.linear_query.bias, group_attn.linear_key.bias = [nn.Parameter(i) for i in constituent_attn.proj_bias.chunk(2, dim=0)]
 
-    _, attn1, score1 = group_attn(x, mask, prior)
+    output1, attn1, s1 = group_attn(x, mask, prior)
     # output1, attn1 = group_attn(x, mask, attn1)
     mask = (mask == 0)
-    _, attn2, score2 = constituent_attn(x.permute(1,0,2), prior, mask)
+    output2, attn2, s2 = constituent_attn(x.permute(1,0,2), prior, mask)
     # output2, attn2 = constituent_attn(x.permute(1,0,2), attn2, mask)
 
-    assert torch.equal(score1, score2)
+    assert torch.equal(output1, output2)

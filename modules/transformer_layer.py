@@ -4,9 +4,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.layer_norm import LayerNorm
-from modules.multihead_attention import MultiheadAttention
-from modules.utils import Linear
+from .layer_norm import LayerNorm
+from .multihead_attention import MultiheadAttention
+from .utils import Linear
 
 
 class PositionWiseFeedForward(nn.Module):
@@ -26,8 +26,8 @@ class PositionWiseFeedForward(nn.Module):
 
     def forward(self, x):
         x = self.input_linear(x)
-        x = F.dropout(x, self.dropout, training=self.training)
         x = self.activation(x)
+        x = F.dropout(x, self.dropout, training=self.training)
         x = self.output_linear(x)
         return x
 

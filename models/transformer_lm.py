@@ -18,6 +18,7 @@ class TransformerLanguageModel(nn.Module):
     def __init__(self, vocab, args):
         super().__init__()
         self.vocab_size = len(vocab)
+        self.padding_idx = vocab.pad_idx
         self.model_dim = args.embed_dim
         self.num_head = args.num_head
         self.head_dim = args.head_dim
@@ -25,7 +26,7 @@ class TransformerLanguageModel(nn.Module):
         self.dropout = args.dropout
         self.attn_dropout = args.attn_dropout
         self.num_layer = args.num_layer
-        self.padding_idx = vocab.pad_idx
+        self.tied_layer = args.tied_layer  # Share all weight between layers
         self.input_cutoff = args.input_cutoff
         self.input_factor = args.input_factor
         self.softmax_cutoff = args.softmax_cutoff
@@ -34,7 +35,6 @@ class TransformerLanguageModel(nn.Module):
         # No masked self attention for masked language model.
         self.self_attn_mask = False if args.task == 'masked_lm' else True
         self.bias = True
-        self.tied_layer = args.tied_layer
 
         self.position_embedding = SinusoidalPositionalEmbedding(self.model_dim)
 
@@ -93,7 +93,7 @@ class TransformerLanguageModel(nn.Module):
         else:
             mask = padding_mask[:, None, :]
         x = self.embedding(x) * (self.model_dim ** 0.5)
-        x = x + self.position_embedding(torch.arange(seq_len, device=x.device))[:, None, :]
+        x = x + self.position_embedding(torch.arange(1, seq_len + 1, device=x.device))[:, None, :]
         x = F.dropout(x, self.dropout, training=self.training)
         for encoder_layer in self.layer:
             x = encoder_layer(x, mask)

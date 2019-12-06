@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
 
-from modules.utils import Linear
+from .utils import Linear
 
 
 class MultiheadAttention(nn.Module):
@@ -184,8 +184,7 @@ class MultiheadAttention(nn.Module):
                 nn.init.constant_(self.value_bias, 0.)
 
     def extra_repr(self):
-        return f"output_dim={self.output_dim}, num_head={self.num_head}, " \
-               f"head_dim={self.head_dim}, bias={self.bias}"
+        return f"(head): num_head={self.num_head}, head_dim={self.head_dim}, bias={self.bias}"
 
 
 # TODO replace with unit test?
@@ -213,7 +212,7 @@ if __name__ == '__main__':
 
     mask = padding_mask[:, None, :] | sub_mask[None, :, :]
     output = attn(x, x, x, attn_mask=mask)  # Without self attention speed up.
-    self_output = self_attn(x, attn_mask=mask)  # with self attention speed up.
+    self_output = self_attn(x, attn_mask=mask)  # With self attention speed up.
 
     attn_mask = torch.zeros_like(sub_mask, dtype=torch.float32)
     attn_mask = attn_mask.masked_fill(sub_mask, -math.inf)

@@ -39,7 +39,7 @@ class TreeTransformerLayer(nn.Module):
         weight, prior = self.constituent(x, prior, padding_mask)
         x = self.multi_head(x, attn_mask=padding_mask,
                             attn_hook=lambda attn: self.apply_weight(attn, weight))
-        x = residual + F.dropout(x, training=self.training)
+        x = residual + F.dropout(x, self.dropout, training=self.training)
 
         x = self.position_wise(x)
         return x, prior

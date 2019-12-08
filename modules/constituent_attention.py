@@ -81,7 +81,7 @@ class ConstituentAttention(nn.Module):
         # Copy to lower half.
         c_attn = c_attn + c_attn.transpose(-2, -1) + neighbor_attn.masked_fill(diag == 0, 1e-9)
 
-        return c_attn, neighbor_attn, neighbor_attn
+        return c_attn, neighbor_attn
 
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.proj_weight)
@@ -129,7 +129,7 @@ class GroupAttention(nn.Module):
         g_attn = tri_matrix.matmul(t).exp().masked_fill((tri_matrix.int() - b) == 0, 0)
         g_attn = g_attn + g_attn.transpose(-2, -1) + neibor_attn.masked_fill(b == 0, 1e-9)
 
-        return g_attn, neibor_attn, neibor_attn
+        return g_attn, neibor_attn
 
 
 # TODO replace with unit test
@@ -147,10 +147,10 @@ if __name__ == '__main__':
     group_attn.linear_query.weight, group_attn.linear_key.weight = [nn.Parameter(i) for i in constituent_attn.proj_weight.chunk(2, dim=0)]
     group_attn.linear_query.bias, group_attn.linear_key.bias = [nn.Parameter(i) for i in constituent_attn.proj_bias.chunk(2, dim=0)]
 
-    output1, attn1, s1 = group_attn(x, mask, prior)
-    # output1, attn1 = group_attn(x, mask, attn1)
+    output1, attn1 = group_attn(x, mask, prior)
+    output1, attn1 = group_attn(x, mask, attn1)
     mask = (mask == 0)
-    output2, attn2, s2 = constituent_attn(x.permute(1,0,2), prior, mask)
-    # output2, attn2 = constituent_attn(x.permute(1,0,2), attn2, mask)
+    output2, attn2 = constituent_attn(x.permute(1,0,2), prior, mask)
+    output2, attn2 = constituent_attn(x.permute(1,0,2), attn2, mask)
 
     assert torch.equal(output1, output2)

@@ -19,15 +19,17 @@ class SinusoidalPositionalEmbedding(nn.Module):
         super().__init__()
         self.model_dim = model_dim
 
-        freq = 1 / (10000 ** (torch.arange(0., model_dim, 2.) / model_dim))
+        dim = model_dim // 2
+        freq = math.log(10000) / (dim - 1)
+        freq = torch.exp(-freq * torch.arange(dim, dtype=torch.float))
         self.register_buffer('freq', freq)
 
     def forward(self, position):
         # position: [pos]
-        # freq: [dim]
+        # self.freq: [dim]
 
         # Outer product
         # emb = [pos x dim]
-        emb = torch.einsum('p,i->pi', position, self.freq)
+        emb = torch.ger(position.type(self.freq.dtype), self.freq)
         emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
         return emb

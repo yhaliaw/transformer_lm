@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from .utils import TiedLinear, TiedEmbedding
+from modules.utils import TiedLinear, TiedEmbedding
 
 
 class AdaptiveInput(nn.Module):
@@ -61,24 +61,19 @@ class AdaptiveInput(nn.Module):
         size = x.size()
         dtype = self.projection[0].weight.dtype
 
-        # x: [num]
-        # embed: [num x dim]
-        x = x.reshape(-1)
         self.projection[0].weight.type()
-        embed = torch.zeros((x.size(0), self.output_dim), dtype=dtype, device=x.device)
+        embed = torch.zeros((*size, self.output_dim), dtype=dtype, device=x.device)
 
         # Convert embedding of each cluster.
         for i in range(len(self.cutoff) - 1):
             mask = (x >= self.cutoff[i]) & (x < self.cutoff[i + 1])
             if not mask.any():
                 continue
-            idx = mask.nonzero().reshape(-1)
-            symbol_idx = x[idx] - self.cutoff[i]
+            symbol_idx = x[mask] - self.cutoff[i]
 
             emb = self.embedding[i](symbol_idx)
             proj = self.projection[i](emb)
-            embed.index_copy_(0, idx, proj)
-        embed = embed.reshape(*size, self.output_dim)
+            embed[mask] = proj
         return embed
 
 

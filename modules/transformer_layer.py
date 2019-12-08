@@ -32,6 +32,50 @@ class PositionWiseFeedForward(nn.Module):
         return x
 
 
+class TransformerLayer(nn.Module):
+    """A single layer in transformer.
+
+    See "Attention is all you need" for details:
+    https://arxiv.org/abs/1706.03762
+    """
+    def __init__(self, model_dim, num_head, inner_dim, dropout, attn_dropout=0., head_dim=None,
+                 bias=False, activation=F.relu):
+        super().__init__()
+        self.model_dim = model_dim
+        self.num_head = num_head
+        self.inner_dim = inner_dim
+        self.dropout = dropout
+        self.attn_dropout = attn_dropout
+        self.head_dim = head_dim
+        self.bias = bias
+        self.activation = activation
+
+        # Parameters
+        self.self_attn_layer_norm = LayerNorm(model_dim, elementwise_affine=True)
+        self.self_attn = MultiheadAttention(
+            model_dim, num_head, dropout=attn_dropout, head_dim=head_dim
+        )
+        self.position_wise_layer_norm = LayerNorm(model_dim, elementwise_affine=True)
+        self.position_wise = PositionWiseFeedForward(
+            model_dim, inner_dim, bias=bias, dropout=dropout, activation=activation
+        )
+
+    def forward(self, x, self_attn_mask=None):
+        residual = x
+        x = self.self_attn_layer_norm(x)
+        x = self.self_attn(x, attn_mask=self_attn_mask)
+        x = F.dropout(x, self.dropout, training=self.training)
+        x = residual + x
+
+        residual = x
+        x = self.position_wise_layer_norm(x)
+        x = self.position_wise(x)
+        x = F.dropout(x, self.dropout, training=self.training)
+        x = residual + x
+        return x
+
+
+# Unused
 class Sublayer(nn.Module):
     """Sublayer in transformer.
 
@@ -56,41 +100,7 @@ class Sublayer(nn.Module):
     def forward(self, x, *args, **kwargs):
         if self.norm_before:
             return x + F.dropout(self.module(self.layer_norm(x), *args, **kwargs),
-                                 training=self.training)
+                                 self.dropout, training=self.training)
         else:
             return self.layer_norm(x + F.dropout(self.module(x, *args, **kwargs),
-                                                 training=self.training))
-
-
-class TransformerLayer(nn.Module):
-    """A single layer in transformer.
-
-    See "Attention is all you need" for details:
-    https://arxiv.org/abs/1706.03762
-    """
-    def __init__(self, model_dim, num_head, inner_dim, dropout, attn_dropout=0., head_dim=None,
-                 bias=False, activation=F.relu):
-        super().__init__()
-        self.model_dim = model_dim
-        self.num_head = num_head
-        self.inner_dim = inner_dim
-        self.dropout = dropout
-        self.attn_dropout = attn_dropout
-        self.head_dim = head_dim
-        self.bias = bias
-        self.activation = activation
-
-        # Parameters
-        self_attn = MultiheadAttention(
-            model_dim, num_head, dropout=attn_dropout, head_dim=head_dim
-        )
-        self.self_attn = Sublayer(self_attn, model_dim, dropout)
-        position_wise = PositionWiseFeedForward(
-            model_dim, inner_dim, bias=bias, dropout=dropout, activation=activation
-        )
-        self.position_wise = Sublayer(position_wise, model_dim, dropout)
-
-    def forward(self, x, self_attn_mask=None):
-        x = self.self_attn(x, attn_mask=self_attn_mask)
-        x = self.position_wise(x)
-        return x
+                                                 self.dropout, training=self.training))

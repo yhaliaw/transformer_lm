@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn import Parameter
 
-from .utils import Linear
+from modules.utils import Linear
 
 
 class MultiheadAttention(nn.Module):
@@ -48,29 +48,21 @@ class MultiheadAttention(nn.Module):
         self.query_dim = output_dim if query_dim is None else query_dim
         self.key_dim = output_dim if key_dim is None else key_dim
         self.value_dim = self.key_dim if value_dim is None else value_dim
-        self.same_dim = self.query_dim == self.key_dim == self.value_dim
 
         self.scale = 1 / (self.head_dim ** 0.5)
 
         # Parameters
-        if self.same_dim:
-            self.proj_weight = Parameter(torch.Tensor(self.head_dim * self.num_head * 3, self.query_dim))
-            if bias:
-                self.proj_bias = Parameter(torch.Tensor(self.head_dim * self.num_head * 3))
-            else:
-                self.register_parameter('proj_bias', None)
+        self.query_weight = Parameter(torch.Tensor(self.head_dim * self.num_head, self.query_dim))
+        self.key_weight = Parameter(torch.Tensor(self.head_dim * self.num_head, self.key_dim))
+        self.value_weight = Parameter(torch.Tensor(self.head_dim * self.num_head, self.value_dim))
+        if bias:
+            self.query_bias = Parameter(torch.Tensor(self.head_dim * num_head))
+            self.key_bias = Parameter(torch.Tensor(self.head_dim * num_head))
+            self.value_bias = Parameter(torch.Tensor(self.head_dim * num_head))
         else:
-            self.query_weight = Parameter(torch.Tensor(self.head_dim * self.num_head, self.query_dim))
-            self.key_weight = Parameter(torch.Tensor(self.head_dim * self.num_head, self.key_dim))
-            self.value_weight = Parameter(torch.Tensor(self.head_dim * self.num_head, self.value_dim))
-            if bias:
-                self.query_bias = Parameter(torch.Tensor(self.head_dim * num_head))
-                self.key_bias = Parameter(torch.Tensor(self.head_dim * num_head))
-                self.value_bias = Parameter(torch.Tensor(self.head_dim * num_head))
-            else:
-                self.register_parameter('query_bias', None)
-                self.register_parameter('key_bias', None)
-                self.register_parameter('value_bias', None)
+            self.register_parameter('query_bias', None)
+            self.register_parameter('key_bias', None)
+            self.register_parameter('value_bias', None)
         self.linear = Linear(self.head_dim * self.num_head, self.output_dim, bias=bias)
 
         self.reset_parameters()
@@ -86,7 +78,6 @@ class MultiheadAttention(nn.Module):
             attn_hook: Hook function to process attention weights.
         Returns: Output of multi-head attention.
         """
-        self_attn = key is None
         key = query if key is None else key
         value = key if value is None else value
         query_len, batch_size, _ = query.size()
@@ -95,7 +86,7 @@ class MultiheadAttention(nn.Module):
 
         # Projection for each head.
         # [seq x batch x dim] -> [seq x batch x head x proj_dim]
-        query, key, value = self.projection(query, key, value, self_attn=self_attn)
+        query, key, value = self.projection(query, key, value)
 
         # Reshape for batch matrix multiplication.
         # [seq x batch x head x proj_dim] -> [batch * head x k_seq x proj_dim]
@@ -138,7 +129,6 @@ class MultiheadAttention(nn.Module):
         # Concat the heads.
         # x: [batch * head x q_seq x proj_dim] -> [q_seq x batch x dim]
         x = x.permute(1, 0, 2)
-        x = x.reshape(query_len, batch_size, self.num_head, self.head_dim)
         x = x.reshape(query_len, batch_size, self.num_head * self.head_dim)
 
         # Apply linear layer.
@@ -146,82 +136,80 @@ class MultiheadAttention(nn.Module):
         x = self.linear(x)
         return x
 
-    def projection(self, query, key, value, self_attn=False):
+    def projection(self, query, key, value):
         query_len, batch_size, _ = query.size()
         key_len = key.size(0)
-        if self_attn:
-            assert self.same_dim
-            query, key, value = F.linear(query, self.proj_weight, self.proj_bias).chunk(3, dim=-1)
-        elif self.same_dim:
-            key_len = key.size(0)
-            query_weight, key_weight, value_weight = self.proj_weight.chunk(3, dim=0)
-            query_bias, key_bias, value_bias = self.proj_bias.chunk(3, dim=0)
-            query = F.linear(query, query_weight, query_bias)
-            key = F.linear(key, key_weight, key_bias)
-            value = F.linear(value, value_weight, value_bias)
-        else:
-            key_len = key.size(0)
-            query = F.linear(query, self.query_weight, self.query_bias)
-            key = F.linear(key, self.key_weight, self.key_bias)
-            value = F.linear(value, self.value_weight, self.value_bias)
+        query = F.linear(query, self.query_weight, self.query_bias)
+        key = F.linear(key, self.key_weight, self.key_bias)
+        value = F.linear(value, self.value_weight, self.value_bias)
         query = query.view(query_len, batch_size, self.num_head, self.head_dim)
         key = key.view(key_len, batch_size, self.num_head, self.head_dim)
         value = value.view(key_len, batch_size, self.num_head, self.head_dim)
         return query, key, value
 
     def reset_parameters(self):
-        if self.same_dim:
-            nn.init.xavier_uniform_(self.proj_weight)
-            if self.proj_bias is not None:
-                nn.init.constant_(self.proj_bias, 0.)
-        else:
-            nn.init.xavier_uniform_(self.query_weight)
-            nn.init.xavier_uniform_(self.key_weight)
-            nn.init.xavier_uniform_(self.value_weight)
-            if self.bias:
-                nn.init.constant_(self.query_bias, 0.)
-                nn.init.constant_(self.key_bias, 0.)
-                nn.init.constant_(self.value_bias, 0.)
+        nn.init.xavier_uniform_(self.query_weight)
+        nn.init.xavier_uniform_(self.key_weight)
+        nn.init.xavier_uniform_(self.value_weight)
+        if self.bias:
+            nn.init.constant_(self.query_bias, 0.)
+            nn.init.constant_(self.key_bias, 0.)
+            nn.init.constant_(self.value_bias, 0.)
 
     def extra_repr(self):
-        return f"(head): num_head={self.num_head}, head_dim={self.head_dim}, bias={self.bias}"
+        return f"(multi_head): num_head={self.num_head}, head_dim={self.head_dim}, bias={self.bias}"
 
 
 # TODO replace with unit test?
 if __name__ == '__main__':
+    from time import time
     # Test implementation is same as PyTorch implementation of F.multi_head_attention_forward.
     from modules.utils import subsequent_mask
-    sub_mask = subsequent_mask(10)
-    padding_mask = torch.zeros(5, 10, dtype=torch.bool)
+    sub_mask = subsequent_mask(1024).cuda()
+    padding_mask = torch.zeros(4, 1024, dtype=torch.bool).cuda()
     padding_mask[0][7:] = 1
     padding_mask[1][1:] = 1
     padding_mask[2][8:] = 1
     padding_mask[3][3:] = 1
-    padding_mask[4][6:] = 1
 
     # 10 seq, 5 batch, 512 dim
-    x = torch.normal(mean=0., std=1., size=(10, 5, 512))
+    x = torch.normal(mean=0., std=1., size=(1024, 4, 512)).half().cuda()
 
-    attn = MultiheadAttention(512, 8)
-    self_attn = MultiheadAttention(512, 8)
-    nn.init.normal_(attn.proj_bias, 0, 0.25)
-
-    self_attn.proj_weight = attn.proj_weight
-    self_attn.proj_bias = attn.proj_bias
-    self_attn.linear = attn.linear
+    attn = MultiheadAttention(512, 8).half().cuda()
+    nn.init.normal_(attn.query_bias)
+    nn.init.normal_(attn.key_bias)
+    nn.init.normal_(attn.value_bias)
 
     mask = padding_mask[:, None, :] | sub_mask[None, :, :]
-    output = attn(x, x, x, attn_mask=mask)  # Without self attention speed up.
-    self_output = self_attn(x, attn_mask=mask)  # With self attention speed up.
+    for i in range(10):
+        output = attn(x, x, x, attn_mask=mask)
+        torch.cuda.synchronize()
 
-    attn_mask = torch.zeros_like(sub_mask, dtype=torch.float32)
+    torch.cuda.synchronize()
+    st = time()
+    for i in range(100):
+        output = attn(x, attn_mask=mask)
+        torch.cuda.synchronize()
+    print(time() - st)
+
+    attn_mask = torch.zeros_like(sub_mask, dtype=torch.float32).cuda()
     attn_mask = attn_mask.masked_fill(sub_mask, -math.inf)
-    torch_output, _ = F.multi_head_attention_forward(
-        x, x, x, 512, 8, attn.proj_weight, attn.proj_bias,
-        bias_k=None, bias_v=None, add_zero_attn=False, dropout_p=0.,
-        out_proj_weight=attn.linear.weight, out_proj_bias=attn.linear.bias,
-        training=False, key_padding_mask=padding_mask, attn_mask=attn_mask
-    )
 
-    assert torch.equal(output, self_output)
+    bias = torch.cat((attn.query_bias, attn.key_bias, attn.value_bias))
+    torch.cuda.synchronize()
+    st = time()
+    for i in range(100):
+        torch_output, _ = F.multi_head_attention_forward(
+            x, x, x, 512, 8, None, bias,
+            bias_k=None, bias_v=None, add_zero_attn=False, dropout_p=0.,
+            out_proj_weight=attn.linear.weight, out_proj_bias=attn.linear.bias,
+            training=False, key_padding_mask=padding_mask, attn_mask=attn_mask,
+            use_separate_proj_weight=True,
+            q_proj_weight=attn.query_weight,
+            k_proj_weight=attn.key_weight,
+            v_proj_weight=attn.value_weight
+        )
+        torch.cuda.synchronize()
+    print(time() - st)
+
     assert torch.equal(torch_output, output)

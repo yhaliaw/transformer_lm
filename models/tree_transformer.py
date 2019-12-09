@@ -70,7 +70,7 @@ class TreeTransformer(TransformerLanguageModel):
         padding_mask = padding_mask.permute(1, 0)[:, None, :]
 
         x = self.embedding(x) * (self.model_dim ** 0.5)
-        x = x + self.position_embedding(torch.arange(seq_len, device=x.device))[:, None, :]
+        x = x + self.position_embedding(torch.arange(1, seq_len + 1, device=x.device))[:, None, :]
         x = F.dropout(x, self.dropout, training=self.training)
         prior = 0
         for encoder_layer in self.layer:

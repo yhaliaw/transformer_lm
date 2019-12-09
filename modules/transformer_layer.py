@@ -51,31 +51,21 @@ class TransformerLayer(nn.Module):
         self.activation = activation
 
         # Parameters
-        self.self_attn_layer_norm = LayerNorm(model_dim, elementwise_affine=True)
-        self.self_attn = MultiheadAttention(
+        self_attn = MultiheadAttention(
             model_dim, num_head, dropout=attn_dropout, head_dim=head_dim
         )
-        self.position_wise_layer_norm = LayerNorm(model_dim, elementwise_affine=True)
-        self.position_wise = PositionWiseFeedForward(
+        self.self_attn = Sublayer(self_attn, model_dim, dropout)
+        position_wise = PositionWiseFeedForward(
             model_dim, inner_dim, bias=bias, dropout=dropout, activation=activation
         )
+        self.position_wise = Sublayer(position_wise, model_dim, dropout)
 
     def forward(self, x, self_attn_mask=None):
-        residual = x
-        x = self.self_attn_layer_norm(x)
         x = self.self_attn(x, attn_mask=self_attn_mask)
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = residual + x
-
-        residual = x
-        x = self.position_wise_layer_norm(x)
         x = self.position_wise(x)
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = residual + x
         return x
 
 
-# Unused
 class Sublayer(nn.Module):
     """Sublayer in transformer.
 
@@ -87,20 +77,20 @@ class Sublayer(nn.Module):
     Set 'norm_after' to true for the paper version.
     """
 
-    def __init__(self, module, model_dim, dropout=0.1, norm_before=True):
+    def __init__(self, module, model_dim, dropout=0.1, norm_after=False):
         super().__init__()
         self.module = module
         self.model_dim = model_dim
         self.dropout = dropout
-        self.norm_before = norm_before
+        self.norm_after = norm_after
 
         # Parameters
-        self.layer_norm = LayerNorm(model_dim)
+        self.layer_norm = LayerNorm(model_dim, elementwise_affine=True)
 
     def forward(self, x, *args, **kwargs):
-        if self.norm_before:
-            return x + F.dropout(self.module(self.layer_norm(x), *args, **kwargs),
-                                 self.dropout, training=self.training)
-        else:
+        if self.norm_after:
             return self.layer_norm(x + F.dropout(self.module(x, *args, **kwargs),
                                                  self.dropout, training=self.training))
+        else:
+            return x + F.dropout(self.module(self.layer_norm(x), *args, **kwargs),
+                                 self.dropout, training=self.training)

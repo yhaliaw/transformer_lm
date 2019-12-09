@@ -162,6 +162,11 @@ def setup_train(i, corpus, args):
             t = batch['target'].data.numpy()
             n = batch['num_target']
             vocab = corpus.vocab
+            # # TODO print out data to test
+            # feat = np.transpose(f)
+            # for data in feat:
+            #     print(vocab.to_text(data))
+            # continue
             # TODO test dataloading
 
             num_target = sum(batch['num_target'])

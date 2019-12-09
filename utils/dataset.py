@@ -73,7 +73,7 @@ def get_eval_loader(data, vocab, args):
 def collate_data(data, pad_idx, left_pad=False):
     """Convert a batch of data from list to padded tensor format."""
     max_len = max(s.size(0) for s in data)
-    max_len = ((max_len // 8) + 1) * 8  # Round length to multiple of 8.
+    max_len = math.ceil(max_len / 8) * 8  # Round length to multiple of 8.
     datatype = data[0].dtype
     padded_data = torch.ones((len(data), max_len), dtype=datatype).fill_(pad_idx)
     for i, s in enumerate(data):

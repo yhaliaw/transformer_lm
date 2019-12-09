@@ -39,6 +39,8 @@ def main():
     parser = train_argparser()
     args = parser.parse_args()
 
+    torch.set_num_threads(1)
+
     # Set working directory.
     # Under the --path dir, there will be a cache dir, and a dir named
     # with current time to store training results.
@@ -151,8 +153,10 @@ def setup_train(i, corpus, args):
     log(f"|  Training on {socket.gethostname()} with rank {args.rank}.", True)
 
     def train(step, epoch, best_loss):
-        train_loader.dataset.set_seed(epoch)
         model.train()
+        optimizer.zero_grad()
+
+        train_loader.dataset.set_seed(epoch)
         log.init_epoch(step, epoch, train_loader.dataset.total_target)
         epoch_loss = 0
         epoch_num_target = 0
@@ -162,7 +166,7 @@ def setup_train(i, corpus, args):
             t = batch['target'].data.numpy()
             n = batch['num_target']
             vocab = corpus.vocab
-            # # TODO print out data to test
+            # TODO print out data to test
             # feat = np.transpose(f)
             # for data in feat:
             #     print(vocab.to_text(data))
@@ -287,7 +291,8 @@ def setup_train(i, corpus, args):
         return total_loss / total_target
 
     def validate(best_loss):
-        loss = evaluate()
+        with torch.no_grad():
+            loss = evaluate()
         log.valid(loss, step, epoch)
         if i == 0 and best_loss > loss:
             best_loss = loss
@@ -347,7 +352,6 @@ def setup_train(i, corpus, args):
 def save_checkpoint(path, step, epoch, model, optimizer=None, scheduler=None, amp=None):
     if isinstance(model, DistributedDataParallel):
         model = model.module
-    model = model.float()
     checkpoint = {'step': step, 'epoch': epoch, 'model': model.state_dict()}
     if optimizer is not None:
         checkpoint['optimizer'] = optimizer.state_dict()

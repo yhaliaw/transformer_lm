@@ -142,7 +142,7 @@ class Logger(object):
     def init_epoch(self, step, epoch, total):
         if self.rank == 0:
             self.progress_bar = tqdm(
-                desc=f"{epoch} epoch", total=total, unit='',
+                desc=f"| Epoch {epoch}", total=total, unit='',
                 bar_format='{l_bar}{bar}|[{elapsed}<{remaining}]{postfix}'
             )
 

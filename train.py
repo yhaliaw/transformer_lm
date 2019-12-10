@@ -304,7 +304,7 @@ def setup_train(i, corpus, args):
 
         best_loss = best_loss / math.log(2)
         log.valid_add_scalar('best loss', best_loss, step)
-        log.valid_add_scalar('best ppl', np.square(best_loss), step)
+        log.valid_add_scalar('best ppl', 2 ** best_loss, step)
         return best_loss
 
     step = resume_step

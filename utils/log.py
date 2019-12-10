@@ -60,7 +60,7 @@ class Logger(object):
         loss = loss / math.log(2)
         self.valid_add_scalar('loss', loss, step)
         self.log(f"|  Validation at {epoch} epoch, {step} step, loss: {loss:.4f}"
-                 f", perplexity: {np.square(loss):.4f}")
+                 f", perplexity: {2 ** loss:.4f}")
 
     def train_add_scalar(self, tag, scalar_value, global_step=None, walltime=None):
         if self.rank == 0 and self.tensorboard:
@@ -79,7 +79,7 @@ class Logger(object):
         num_step = step - self.last_step
 
         loss = self.loss / self.num_target / math.log(2)
-        perplexity = np.square(loss)
+        perplexity = 2 ** loss
         norm = self.norm / num_step
         clip_norm = self.clip_norm / num_step
         time_per_step = (end_time - self.time) / num_step
@@ -125,7 +125,7 @@ class Logger(object):
             self.progress_bar.close()
 
         loss = self.epoch_loss / self.epoch_num_target / math.log(2)
-        perplexity = np.square(loss)
+        perplexity = 2 ** loss
         time_per_step = self.epoch_time / self.epoch_num_step
         token_per_step = self.epoch_num_target / self.epoch_num_step
         token_per_sec = self.epoch_num_target / self.epoch_time

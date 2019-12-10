@@ -91,14 +91,14 @@ def main():
         loss = evaluate(valid_loader)
         loss = loss / math.log(2)
         print(f"|  valid loss: {loss:.4f}")
-        print(f"\n== Valid perplexity: {np.square(loss):.4f} ==\n")
+        print(f"\n== Valid perplexity: {2 ** loss:.4f} ==\n")
 
     print("|  Evaluating model on test data...")
     test_loader = get_eval_loader(corpus.test, corpus.vocab, args)
     loss = evaluate(test_loader)
     loss = loss / math.log(2)
     print(f"|  test loss: {loss:.4f}")
-    print(f"\n== Test perplexity: {np.sqaure(loss):.4f} ==\n")
+    print(f"\n== Test perplexity: {2 ** loss:.4f} ==\n")
 
 
 def valid_options(args):

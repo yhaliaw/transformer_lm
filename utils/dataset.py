@@ -214,7 +214,7 @@ class LanguageModelDataset(IterableDataset):
         else:
             indexes = list(range(len(self.sample)))
             # Sort by sequence length.
-            indexes.sort(key=lambda i: self.sample[i][0], reverse=True)
+            indexes.sort(key=lambda i: self.sample[i][0])
         return self.create_batch(indexes)
 
     def set_seed(self, seed: int):

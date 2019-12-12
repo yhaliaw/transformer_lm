@@ -203,6 +203,17 @@ def setup_train(i, corpus, args):
                 if 'out of memory' in str(e):
                     log.oom += 1
                     print(f"== Rank {args.rank}: Training out of memory. Skipping this batch. ==")
+                    if 'scaled_loss' in locals():
+                        del scaled_loss
+                    if 'loss' in locals():
+                        del loss
+                    if 'feature' in locals():
+                        del feature
+                    if 'target' in locals():
+                        del target
+                    for param in model.parameters():
+                        if param.grad is not None:
+                            param.grad = None
                     if args.cuda:
                         torch.cuda.empty_cache()
                 else:
@@ -212,7 +223,6 @@ def setup_train(i, corpus, args):
                 step, epoch, best_loss = update(step, epoch, best_loss)
                 if args.max_step is not None and step >= args.max_step:
                     break
-
         # Remaining batches that doesn't fit in update freq.
         if not args.trim_step and (batch_num + 1) % args.step_freq != 0:
             step, epoch, best_loss = update(step, epoch, best_loss)

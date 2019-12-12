@@ -213,8 +213,9 @@ class LanguageModelDataset(IterableDataset):
             indexes = torch.randperm(len(self.sample), generator=g).tolist()
         else:
             indexes = list(range(len(self.sample)))
-            # Sort by sequence length.
-            indexes.sort(key=lambda i: self.sample[i][0])
+            if self.context_type != 'file':
+                # Sort by sequence length.
+                indexes.sort(key=lambda i: self.sample[i][0])
         return self.create_batch(indexes)
 
     def set_seed(self, seed: int):

@@ -12,7 +12,7 @@ class Logger(object):
         self.rank = rank
         self.tensorboard = False
 
-        if tensorboard_dir is not None:
+        if rank == 0 and tensorboard_dir is not None:
             try:
                 from tensorboardX import SummaryWriter
                 self.tensorboard = True

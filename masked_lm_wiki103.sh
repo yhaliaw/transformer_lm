@@ -11,6 +11,7 @@ if [ "$1" == "train" ]; then
     --path workspace/wiki103 --tensorboard \
     --task masked_lm --context-type sent \
     --train-token 8192 --max-token 8192 \
+    --min-length 5 \
     --step-freq 2 \
     --eval-token 4096 --eval-max-token 4096 \
     --optim adam --adam-betas 0.9 0.98 --lr 0.00025 \

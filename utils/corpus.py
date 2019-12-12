@@ -157,7 +157,7 @@ class Vocab(object):
             return self.unk_idx
 
     def to_text(self, tensor):
-        return " ".join([self.symbols[idx] for idx in tensor])
+        return " ".join([self.symbols[idx] if idx >= 0 else '<unk>' for idx in tensor])
 
     def to_index(self, text):
         return [self.get_idx(sym) for sym in self.tokenize(text)]

@@ -472,6 +472,8 @@ def valid_options(args):
         args.eval_context_size = args.context_size
     if args.eval_context_type is None:
         args.eval_context_type = args.context_type
+    if args.eval_min_length is None:
+        args.eval_min_length = args.min_length
 
     # Model
     args = valid_model(args)

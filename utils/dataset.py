@@ -26,7 +26,7 @@ def get_loader(data, vocab, args):
         )
     elif args.task == 'masked_lm':
         dataset = MaskedLanguageModelDataset(
-            data, vocab, args, training=True, world_size=args.world_size, rank=args.rank
+            data, vocab, args, world_size=args.world_size, rank=args.rank
         )
     else:
         raise NotImplementedError
@@ -90,7 +90,7 @@ class LanguageModelDataset(IterableDataset):
             tokens for context window.
         train_token: Max token for each sample in a batch. Excludes
             tokens for context window.
-        world_size: The world size for distributed training. Use default
+        world_size: The world size for distributed training. Use defaulchicago foodt
             value for CPU, or single GPU training.
         rank: The rank of process in distributed training. Use default
             value for CPU, or single GPU training.
@@ -101,20 +101,26 @@ class LanguageModelDataset(IterableDataset):
         self.total_target = sum([len(d) for d in data])
         self.pad_idx = vocab.pad_idx
         self.bos_idx = vocab.bos_idx
-        self.context_size = args.context_size
-        self.max_token = args.max_token
-        self.train_token = args.train_token
-        self.context_type = args.context_type
-        self.shuffle = args.shuffle
-        self.trim_data = args.trim_data
-        self.min_length = args.min_length
         self.world_size = world_size
         self.rank = rank
         self.seed = seed
 
-        if not training:
+        if training:
+            self.context_size = args.context_size
+            self.max_token = args.max_token
+            self.train_token = args.train_token
+            self.context_type = args.context_type
+            self.shuffle = args.shuffle
+            self.trim_data = args.trim_data
+            self.min_length = args.min_length
+        else:
+            self.context_size = args.eval_context_size
+            self.max_token = args.eval_max_token
+            self.train_token = args.eval_token
+            self.context_type = args.eval_context_type
+            self.min_length = args.eval_min_length
+            self.trim_data = False
             self.shuffle = False
-            self.min_length = 0
 
         if 'sent' in self.context_type:
             if '.' in vocab:
@@ -244,7 +250,7 @@ class LanguageModelDataset(IterableDataset):
 
 class MaskedLanguageModelDataset(LanguageModelDataset):
 
-    def __init__(self, data, vocab, args, training=True, world_size=1, rank=0, seed=0):
+    def __init__(self, data, vocab, args, world_size=1, rank=0, seed=0):
         # Context size is 0 for masked LM.
         assert args.context_size == 0
         assert args.proc_prob <= 1
@@ -255,7 +261,7 @@ class MaskedLanguageModelDataset(LanguageModelDataset):
         self.mask_prob = args.mask_prob
         self.rand_prob = args.rand_prob
 
-        super().__init__(data, vocab, args, training, world_size, rank, seed)
+        super().__init__(data, vocab, args, True, world_size, rank, seed)
         self.total_target *= args.proc_prob
 
     def create_sample(self, data):

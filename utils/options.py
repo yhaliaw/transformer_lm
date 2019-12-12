@@ -180,6 +180,8 @@ def dataloading_args(parser):
                              "slow. Recommend to set a low --eval-token.")
     parser.add_argument('--worker', type=int, default=1,
                         help="Number of workers spawn by DataLoader.")
+
+    # Training
     parser.add_argument('--max-token', type=int, default=4096,
                         help="Max number of token per batch. Includes context-size.")
     parser.add_argument('--train-token', type=int, default=4096,
@@ -187,12 +189,6 @@ def dataloading_args(parser):
                              "the actual number of training token depends on --proc-prob.")
     parser.add_argument('--context-size', type=int, default=0,
                         help="The context window size for left-to-right language model.")
-    parser.add_argument('--eval-max-token', type=int,
-                        help="Max number of token per batch for evaluation.")
-    parser.add_argument('--eval-token', type=int,
-                        help="The number of training token for each sample for evaluation.")
-    parser.add_argument('--eval-context-size', type=int,
-                        help='The context window size for language model for evaluation.')
     parser.add_argument('--context-type', type=str, default='line',
                         choices=['sent', 'merge_sent', 'line', 'merge_line', 'file'],
                         help="The type of context range.\n"
@@ -200,15 +196,27 @@ def dataloading_args(parser):
                              "line: Each line is a context range."
                              "file: All lines are merged into a single context range."
                              "merge: Allow context range to be merge while respecting boundary.")
-    parser.add_argument('--eval-context-type', type=str,
-                        choices=['sent', 'merge_sent', 'line', 'merge_line', 'file'],
-                        help="The type of context range for evaluation.")
-    parser.add_argument('--trim-data', action='store_true',
-                        help="Trim off data the doesn't produce a complete batch.")
     parser.add_argument('--min-length', type=int, default=0,
                         help="Minimum token length for data to be included in training.")
     parser.add_argument('--shuffle', action='store_true',
                         help="Shuffle the dataset during training.")
+    parser.add_argument('--trim-data', action='store_true',
+                        help="Trim off data the doesn't produce a complete batch.")
+
+    # Evaluation
+    parser.add_argument('--eval-max-token', type=int,
+                        help="Max number of token per batch for evaluation.")
+    parser.add_argument('--eval-token', type=int,
+                        help="The number of training token for each sample for evaluation.")
+    parser.add_argument('--eval-context-size', type=int,
+                        help='The context window size for language model for evaluation.')
+    parser.add_argument('--eval-context-type', type=str,
+                        choices=['sent', 'merge_sent', 'line', 'merge_line', 'file'],
+                        help="The type of context range for evaluation.")
+    parser.add_argument('--eval-min-length', type=int,
+                        help="Minimum token length for data to be included for evaluation.")
+
+    # Masked Language Model
     parser.add_argument('--proc-prob', type=float, default=0.15,
                         help="Probability to use masking procedure on a token during training masked_lm")
     parser.add_argument('--mask-prob', type=float, default=0.8,

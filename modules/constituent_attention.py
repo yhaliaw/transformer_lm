@@ -69,7 +69,7 @@ class ConstituentAttention(nn.Module):
         # hierarchical constraint
         neighbor_attn = prior + (1 - prior) * neighbor_attn
 
-        upper_tri = torch.ones((batch_size, seq_len, seq_len)).triu().to(device)
+        upper_tri = torch.ones((batch_size, seq_len, seq_len)).triu().type(context.dtype).to(device)
         # Build rest of attention matrix.
         # log_prob: [batch x seq x seq]
         log_prob = torch.log(neighbor_attn + 1e-9).masked_fill(~upper_diag, 0)

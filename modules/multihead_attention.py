@@ -115,7 +115,9 @@ class MultiheadAttention(nn.Module):
 
         # Optional: hook function to process the attention weights.
         if attn_hook is not None:
+            attn_weight = attn_weight.view(batch_size, self.num_head, query_len, key_len)
             attn_weight = attn_hook(attn_weight)
+            attn_weight = attn_weight.view(batch_size * self.num_head, query_len, key_len)
         # Optional: Dropout on attention.
         if not self.dropout == 0.:
             attn_weight = F.dropout(attn_weight, self.dropout, self.training)

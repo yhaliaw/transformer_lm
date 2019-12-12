@@ -31,7 +31,7 @@ class TreeTransformerLayer(nn.Module):
 
     @staticmethod
     def apply_weight(attn_weight, weight):
-        return attn_weight * weight
+        return attn_weight * weight[:, None, :, :]
 
     def forward(self, x, prior, padding_mask):
         residual = x

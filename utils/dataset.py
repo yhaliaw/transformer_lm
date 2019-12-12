@@ -263,6 +263,7 @@ class MaskedLanguageModelDataset(LanguageModelDataset):
 
         super().__init__(data, vocab, args, True, world_size, rank, seed)
         self.total_target *= args.proc_prob
+        self.generator = np.random.default_rng()
 
     def create_sample(self, data):
         len_data = data.size(0)
@@ -278,12 +279,16 @@ class MaskedLanguageModelDataset(LanguageModelDataset):
     def process_sample(self, sample):
         return self.mask_procedure(sample[1])
 
+    def set_seed(self, seed: int):
+        self.seed = seed
+        self.generator = np.random.default_rng(seed)
+
     def mask_procedure(self, data):
         feature = data.clone()
         target = torch.ones_like(data) * self.pad_idx
         num_target = 0
         for i in range(len(data)):
-            if np.random.random() < self.proc_prob:
+            if self.generator.random() < self.proc_prob:
                 num_target += 1
                 target[i] = data[i]
                 rand = np.random.random()

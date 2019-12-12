@@ -104,7 +104,7 @@ def main():
 def valid_options(args):
     # Device
     if args.cuda and not torch.cuda.is_available():
-        print("== WARNING: CUDA devices are not found, switching to CPU training. ==")
+        print("== WARNING: CUDA devices are not found, switching to CPU. ==")
         args.cuda = False
     if args.fp16:
         if not args.cuda:

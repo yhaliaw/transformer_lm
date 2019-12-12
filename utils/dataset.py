@@ -20,23 +20,13 @@ def flatten(lst):
 
 
 def get_loader(data, vocab, args):
-    merge = True if 'merge' in args.context_type else False
-    if 'sent' in args.context_type:
-        delimiter = vocab.get_idx('.')
-        data = flatten([split_list(d, delimiter)for d in data])
-    elif 'file' in args.context_type:
-        data = [flatten(data)]
-
     if args.task == 'lm':
-        dataset = LanguageModelIterableDataset(
-            data, vocab, args.context_size, args.train_token, args.max_token,
-            shuffle=args.shuffle, merge=merge, world_size=args.world_size, rank=args.rank
+        dataset = LanguageModelDataset(
+            data, vocab, args, training=True, world_size=args.world_size, rank=args.rank
         )
     elif args.task == 'masked_lm':
-        dataset = MaskedLanguageModelIterableDataset(
-            data, vocab, args.train_token, args.max_token,
-            proc_prob=args.proc_prob, mask_prob=args.mask_prob, rand_prob=args.rand_prob,
-            shuffle=args.shuffle, merge=merge, world_size=args.world_size, rank=args.rank
+        dataset = MaskedLanguageModelDataset(
+            data, vocab, args, training=True, world_size=args.world_size, rank=args.rank
         )
     else:
         raise NotImplementedError
@@ -46,22 +36,13 @@ def get_loader(data, vocab, args):
 
 
 def get_eval_loader(data, vocab, args):
-    merge = True if 'merge' in args.eval_context_type else False
-    if 'sent' in args.eval_context_type:
-        delimiter = vocab.get_idx('.')
-        data = flatten([split_list(d, delimiter)for d in data])
-    elif 'file' in args.eval_context_type:
-        data = [flatten(data)]
-
     if args.task == 'lm':
-        dataset = LanguageModelIterableDataset(
-            data, vocab, args.eval_context_size, args.eval_token,
-            args.eval_max_token, shuffle=False, merge=merge, world_size=1, rank=0
+        dataset = LanguageModelDataset(
+            data, vocab, args, training=False, world_size=1, rank=0
         )
     elif args.task == 'masked_lm':
-        dataset = EvalMaskedLanguageModelIterableDataset(
-            data, vocab, args.eval_token, args.eval_max_token,
-            shuffle=False, merge=merge, world_size=1, rank=0
+        dataset = EvalMaskedLanguageModelDataset(
+            data, vocab, args, world_size=1, rank=0
         )
     else:
         raise NotImplementedError
@@ -84,7 +65,7 @@ def collate_data(data, pad_idx, left_pad=False):
     return padded_data
 
 
-class LanguageModelIterableDataset(IterableDataset):
+class LanguageModelDataset(IterableDataset):
     """A IterableDataset for language model with token based batch size.
 
     Batch data for language modeling. Uses token count for batching,
@@ -105,7 +86,7 @@ class LanguageModelIterableDataset(IterableDataset):
         data: Two-dimensional list containing the tokens.
         vocab: The Vocab associated with the data.
         context_size: The context window length for each sample.
-        max_token: Max token for training in each batch. Excludes
+        max_token: Max token for training in each batch. Includes
             tokens for context window.
         train_token: Max token for each sample in a batch. Excludes
             tokens for context window.
@@ -115,27 +96,60 @@ class LanguageModelIterableDataset(IterableDataset):
             value for CPU, or single GPU training.
     """
 
-    def __init__(self, data, vocab, context_size, train_token, max_token, shuffle=False,
-                 merge=False, world_size=1, rank=0, seed=0):
-        assert max_token >= train_token
+    def __init__(self, data, vocab, args, training=True, world_size=1, rank=0, seed=0):
+        assert args.max_token >= args.train_token
         self.total_target = sum([len(d) for d in data])
-        self.data = data
         self.pad_idx = vocab.pad_idx
         self.bos_idx = vocab.bos_idx
-        self.context_size = context_size
-        self.max_token = max_token
-        self.train_token = train_token
-        self.shuffle = shuffle
-        self.merge = merge
+        self.context_size = args.context_size
+        self.max_token = args.max_token
+        self.train_token = args.train_token
+        self.context_type = args.context_type
+        self.shuffle = args.shuffle
+        self.trim_data = args.trim_data
+        self.min_length = args.min_length
         self.world_size = world_size
         self.rank = rank
         self.seed = seed
 
-    def get_data(self, *index):
-        """Returns the processed data at index."""
-        data = [self.bos_idx]
-        for i in index:
-            data += self.data[i]
+        if not training:
+            self.shuffle = False
+            self.min_length = 0
+
+        if 'sent' in self.context_type:
+            if '.' in vocab:
+                delimiter = vocab.get_idx('.')
+                data = flatten([split_list(d, delimiter) for d in data])
+        elif 'file' in self.context_type:
+            data = [flatten(data)]
+
+        if 'merge' in self.context_type:
+            merged_data = []
+            length = 0
+            sample = []
+            for ele in data:
+                if length + len(ele) < self.train_token:  # Leave one out for bos token.
+                    sample += ele
+                    length += len(ele)
+                else:
+                    merged_data.append(sample)
+                    sample = ele
+                    length = len(ele)
+            merged_data.append(sample)
+            data = merged_data
+
+        self.sample = self.get_sample(data)
+
+    def get_sample(self, data):
+        sample = []
+        for ele in data:
+            for s in self.create_sample(self.process_data(ele)):
+                if s[0] >= self.min_length:
+                    sample.append(s)
+        return sample
+
+    def process_data(self, data):
+        data = [self.bos_idx] + data
         return torch.LongTensor(data)
 
     def create_sample(self, data):
@@ -144,9 +158,9 @@ class LanguageModelIterableDataset(IterableDataset):
         Args:
             data: One-dimensional tensor containing a single sequence.
         Yields:
+            length: Length of feature, including context window.
             feature: The input to produce output.
             target: The target of produced output.
-            feature_len: Length of feature, including context window.
             num_target: Number of targets.
         """
         len_data = data.size(0)
@@ -161,49 +175,50 @@ class LanguageModelIterableDataset(IterableDataset):
             target_padding = torch.ones(start - context_start, dtype=torch.long) * self.pad_idx
             target = torch.cat((target_padding, data[start + 1:end + 1]), dim=-1)
             num_target = end - start
-            yield feature, target, num_target
+            length = end - context_start
+            yield length, feature, target, num_target
             start = end
 
-    def create_batch(self, indexes):
-        """Create batch according to a max token count."""
-        sample_lst = []
-        token_count = 0
-        # For splitting data among distributed processes.
-        sample_num = 0
-        # For merging context range.
+    def process_sample(self, sample):
+        return sample
+
+    def create_batch(self, idx):
         length = 0
-        idx_lst = []
-        for idx in indexes:
-            if self.merge:
-                # Merge context range within train_token length.
-                length += len(self.data[idx])
-                if length < self.train_token:
-                    idx_lst.append(idx)
-                    continue
-                else:
-                    data = self.get_data(*idx_lst)
-                    idx_lst = [idx]
-                    length = len(self.data[idx])
+        batch = []
+        batch_num = 0
+        for i in idx:
+            sample = self.process_sample(self.sample[i])
+            if length <= self.max_token * self.world_size:
+                batch.append(sample)
+                length += sample[0]
             else:
-                data = self.get_data(idx)
-            for sample in self.create_sample(data):
-                token_count += len(sample[0])
-                if token_count > self.max_token:
-                    # Splitting data among multiprocess.
-                    # The statement is always true for single process.
-                    if sample_num % self.world_size == self.rank:
-                        yield sample_lst
-                        last_sample = sample_lst
-                    sample_lst = [sample]
-                    token_count = len(sample[0])
-                    sample_num += 1
-                else:
-                    sample_lst.append(sample)
-        if sample_num % self.world_size == self.rank:
-            yield sample_lst
-        # For distributed training, pad the processes with last complete sample.
-        if sample_num % self.world_size < self.rank:
-            yield last_sample
+                # Split batch among ranks
+                yield batch[0 + self.rank::self.world_size]
+
+                batch = [sample]
+                length = sample[0]
+                batch_num += 1
+        # Remaining data.
+        # If not trimming data or a full sized batch, then yield the batch.
+        if length == self.max_token * self.world_size or not self.trim_data:
+            yield batch[0 + self.rank::self.world_size]
+
+    def __len__(self):
+        return len(self.sample)
+
+    def __iter__(self):
+        if self.shuffle:
+            g = torch.Generator()
+            g.manual_seed(self.seed)
+            indexes = torch.randperm(len(self.sample), generator=g).tolist()
+        else:
+            indexes = list(range(len(self.sample)))
+            # Sort by sequence length.
+            indexes.sort(key=lambda i: self.sample[i][0], reverse=True)
+        return self.create_batch(indexes)
+
+    def set_seed(self, seed: int):
+        self.seed = seed
 
     def collate(self, batch):
         """Process a batch of samples to neural network input/target.
@@ -216,7 +231,7 @@ class LanguageModelIterableDataset(IterableDataset):
             If context is all padding, e.g., each sample is a full
             sentence, then the context is removed.
         """
-        feature, target, num_target = zip(*batch)
+        _, feature, target, num_target = zip(*batch)  # Length is not used in training.
         feature = collate_data(feature, self.pad_idx)
         target = collate_data(target, self.pad_idx)
 
@@ -225,48 +240,36 @@ class LanguageModelIterableDataset(IterableDataset):
                  'num_target': num_target}
         return batch
 
-    def __iter__(self):
-        if self.shuffle:
-            g = torch.Generator()
-            g.manual_seed(self.seed)
-            indexes = torch.randperm(len(self.data), generator=g).tolist()
-        else:
-            indexes = list(range(len(self.data)))
-            # Sort by sequence length.
-            # indexes.sort(key=lambda i: len(self.data[i]), reverse=True)
-        return self.create_batch(indexes)
 
-    def set_seed(self, seed: int):
-        self.seed = seed
+class MaskedLanguageModelDataset(LanguageModelDataset):
 
-
-class MaskedLanguageModelIterableDataset(LanguageModelIterableDataset):
-
-    def __init__(self, data, vocab, train_token, max_token, proc_prob=0.15, mask_prob=0.8, rand_prob=0.1,
-                 shuffle=False, merge=False, world_size=1, rank=0, seed=0):
+    def __init__(self, data, vocab, args, training=True, world_size=1, rank=0, seed=0):
         # Context size is 0 for masked LM.
-        super().__init__(data, vocab, 0, train_token, max_token, shuffle, merge, world_size, rank, seed)
-        assert proc_prob <= 1
-        assert mask_prob + rand_prob <= 1
-        self.total_target *= proc_prob
+        assert args.context_size == 0
+        assert args.proc_prob <= 1
+        assert args.mask_prob + args.rand_prob <= 1
         self.mask_idx = vocab.mask_idx
         self.vocab_size = len(vocab)
-        self.proc_prob = proc_prob
-        self.mask_prob = mask_prob
-        self.rand_prob = rand_prob
+        self.proc_prob = args.proc_prob
+        self.mask_prob = args.mask_prob
+        self.rand_prob = args.rand_prob
+
+        super().__init__(data, vocab, args, training, world_size, rank, seed)
+        self.total_target *= args.proc_prob
 
     def create_sample(self, data):
         len_data = data.size(0)
         start = 0
         end = 0
-        while end + 1 < len_data:
+        while end < len_data:
             # Extract input feature (including context window) and
             # target from data.
-            end = min(len_data - 1, start + self.train_token)
-            feature, target, num_target = self.mask_procedure(data[start:end])
-            if num_target > 0:
-                yield feature, target, num_target
+            end = min(len_data, start + self.train_token)
+            yield end - start, data[start:end]
             start = end
+
+    def process_sample(self, sample):
+        return self.mask_procedure(sample[1])
 
     def mask_procedure(self, data):
         feature = data.clone()
@@ -282,29 +285,55 @@ class MaskedLanguageModelIterableDataset(LanguageModelIterableDataset):
                 elif rand < self.mask_prob + self.rand_prob:
                     rand_token = np.random.randint(0, self.vocab_size)
                     feature[i] = rand_token
-        return feature, target, num_target
+        return feature.size(0), feature, target, num_target
 
 
-class EvalMaskedLanguageModelIterableDataset(LanguageModelIterableDataset):
+class EvalMaskedLanguageModelDataset(LanguageModelDataset):
 
-    def __init__(self, data, vocab, train_token, max_token, shuffle=False, merge=False,
-                 world_size=1, rank=0, seed=0):
+    def __init__(self, data, vocab, args, world_size=1, rank=0, seed=0):
         # Context size is 0 for masked LM.
-        super().__init__(data, vocab, 0, train_token, max_token, shuffle, merge, world_size, rank, seed)
+        assert args.context_size == 0
         self.mask_idx = vocab.mask_idx
+
+        super().__init__(data, vocab, args, False, world_size, rank, seed)
 
     def create_sample(self, data):
         len_data = data.size(0)
         start = 0
         end = 0
-        while end + 1 < len_data:
+        while end < len_data:
             # Extract input feature (including context window) and
             # target from data.
-            end = min(len_data - 1, start + self.train_token)
-            for i in range(end - start):
-                feature = data[start:end].clone()
-                target = torch.ones_like(feature) * self.pad_idx
-                target[i] = feature[i]
-                feature[i] = self.mask_idx
-                yield feature, target, 1  # The num_target is 1
+            end = min(len_data, start + self.train_token)
+            yield end - start, data[start:end]
             start = end
+
+    def create_batch(self, idx):
+        length = 0
+        batch = []
+        batch_num = 0
+        for i in idx:
+            for sample in self.process_sample(self.sample[i]):
+                if length <= self.max_token * self.world_size:
+                    batch.append(sample)
+                    length += sample[0]
+                else:
+                    # Split batch among ranks
+                    yield batch[0 + self.rank::self.world_size]
+
+                    batch = [sample]
+                    length = sample[0]
+                    batch_num += 1
+        # Remaining data.
+        # If not trimming data or a full sized batch, then yield the batch.
+        if length == self.max_token * self.world_size or not self.trim_data:
+            yield batch[0 + self.rank::self.world_size]
+
+    def process_sample(self, sample):
+        # sample[0] is length, sample[1] is the data.
+        for i in range(1, sample[0]):
+            feature = sample[1].clone()
+            target = torch.ones_like(feature) * self.pad_idx
+            target[i] = feature[i]
+            feature[i] = self.mask_idx
+            yield feature.size(0), feature, target, 1  # The num_target is 1

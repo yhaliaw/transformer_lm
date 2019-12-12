@@ -37,6 +37,8 @@ class Logger(object):
         self.epoch_batch_size = 0
         self.epoch_num_clip = 0
 
+        self.oom = 0
+
     def __call__(self, *args, **kwargs):
         return self.log(*args, **kwargs)
 
@@ -94,6 +96,7 @@ class Logger(object):
         self.train_add_scalar('clip norm', clip_norm, step)
         self.train_add_scalar('learning rate', lr, step)
         self.train_add_scalar('loss scale', loss_scale, step)
+        self.train_add_scalar('out of memory', self.oom, step)
 
         if self.rank == 0:
             string = f"{step} step, " \

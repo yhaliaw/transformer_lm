@@ -85,10 +85,10 @@ def train_argparser():
     parser.add_argument('--optim', type=str, default='adam',
                         choices=['adam', 'nag', 'sgd'],
                         help="The optimizer to use.")
-    parser.add_argument('--update-freq', type=int, default=1,
-                        help="Batch to accumulate per update.")
-    parser.add_argument('--trim-batch', action='store_true',
-                        help="Trim off batch that doesn't fit in --update-freq.")
+    parser.add_argument('--step-freq', type=int, default=1,
+                        help="Batch to accumulate per step.")
+    parser.add_argument('--trim-step', action='store_true',
+                        help="Trim off batches that doesn't fit in --step-freq.")
     parser.add_argument('--clip-norm', type=float, default=0.,
                         help="Norm for gradient clipping, 0 for no clipping.")
     parser.add_argument('--lr', type=float,
@@ -203,6 +203,10 @@ def dataloading_args(parser):
     parser.add_argument('--eval-context-type', type=str,
                         choices=['sent', 'merge_sent', 'line', 'merge_line', 'file'],
                         help="The type of context range for evaluation.")
+    parser.add_argument('--trim-data', action='store_true',
+                        help="Trim off data the doesn't produce a complete batch.")
+    parser.add_argument('--min-length', type=int, default=0,
+                        help="Minimum token length for data to be included in training.")
     parser.add_argument('--shuffle', action='store_true',
                         help="Shuffle the dataset during training.")
     parser.add_argument('--proc-prob', type=float, default=0.15,

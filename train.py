@@ -146,6 +146,7 @@ def setup_train(i, corpus, args):
         model.apply(reset_parameters)  # Initialize parameters
 
     # Get DataLoader
+    log("|  Processing data...")
     train_loader = get_loader(corpus.train, corpus.vocab, args)
     if args.valid is not None:
         valid_loader = get_eval_loader(corpus.valid, corpus.vocab, args)
@@ -178,33 +179,42 @@ def setup_train(i, corpus, args):
             log.num_target += num_target
             log.batch_size += len(batch['num_target'])
 
-            feature = batch['feature'].to(args.device)
-            target = batch['target'].to(args.device)
+            try:
+                feature = batch['feature'].to(args.device)
+                target = batch['target'].to(args.device)
 
-            assert (target != vocab.pad_idx).sum() == num_target  # TODO remove debug check
+                assert (target != vocab.pad_idx).sum() == num_target  # TODO remove debug check
 
-            loss = model(feature, target)
-            assert loss.dtype == torch.float32  # TODO remove debug check
-            batch_loss = loss.item()
-            epoch_loss += batch_loss
-            log.loss += batch_loss
+                loss = model(feature, target)
+                assert loss.dtype == torch.float32  # TODO remove debug check
+                batch_loss = loss.item()
+                epoch_loss += batch_loss
+                log.loss += batch_loss
 
-            loss = loss / num_target
-            loss = loss / args.update_freq
+                loss = loss / num_target
+                loss = loss / args.step_freq
 
-            if args.fp16:
-                with amp.scale_loss(loss, optimizer) as scaled_loss:
-                    scaled_loss.backward()
-            else:
-                loss.backward()
+                if args.fp16:
+                    with amp.scale_loss(loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    loss.backward()
+            except RuntimeError as e:
+                if 'out of memory' in str(e):
+                    log.oom += 1
+                    print(f"== Rank {args.rank}: Training out of memory. Skipping this batch. ==")
+                    if args.cuda:
+                        torch.cuda.empty_cache()
+                else:
+                    raise e
 
-            if (batch_num + 1) % args.update_freq == 0:
+            if (batch_num + 1) % args.step_freq == 0:
                 step, epoch, best_loss = update(step, epoch, best_loss)
                 if args.max_step is not None and step >= args.max_step:
                     break
 
         # Remaining batches that doesn't fit in update freq.
-        if not args.trim_batch and (batch_num + 1) % args.update_freq != 0:
+        if not args.trim_step and (batch_num + 1) % args.step_freq != 0:
             step, epoch, best_loss = update(step, epoch, best_loss)
         log.end_epoch(step, epoch)
         return step, epoch_loss / epoch_num_target, best_loss
@@ -274,6 +284,11 @@ def setup_train(i, corpus, args):
             t = batch['target'].data.numpy()
             n = batch['num_target']
             vocab = corpus.vocab
+            # TODO print out data to test
+            # feat = np.transpose(f)
+            # for data in feat:
+            #     print(vocab.to_text(data))
+            # continue
             # TODO test dataloading
 
             num_target = sum(batch['num_target'])

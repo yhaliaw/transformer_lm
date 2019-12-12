@@ -10,10 +10,10 @@ if [ "$1" == "train" ]; then
   --train train.txt --valid valid.txt \
   --path workspace/penn --tensorboard \
   --task masked_lm --context-type line \
-  --train-token 400 --max-token 400 \
-  --eval-token 200 --eval-max-token 200 \
-  --update-freq 64 \
-  --optim adam --lr 0.0005 --warmup-step 0 \
+  --min-length 5 --shuffle \
+  --train-token 4096 --max-token 4096 \
+  --step-freq 4 \
+  --optim adam --lr 0.00025 --warmup-step 0 \
   --scheduler constant \
   --clip-norm 1 \
   --num-layer 12 \
@@ -23,9 +23,9 @@ if [ "$1" == "train" ]; then
   --dropout 0.1 \
   --activation gelu \
   --tied-layer \
-  --cuda \
+  --cuda --fp16 \
   --run-name masked_lm_base_layer_12 \
-  --epoch-per-valid 10 --keep-step 100000 --max-step 150000 \
+  --max-epoch 10 \
   "${@:2}"
 elif [ "$1" == "eval" ]; then
   echo "Evaluating masked language model on penn data..."

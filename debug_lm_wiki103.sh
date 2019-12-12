@@ -10,7 +10,7 @@ if [ "$1" == "train" ]; then
     --path workspace/wiki103 --tensorboard \
     --task lm --context-type file \
     --context-size 0 --train-token 300 --max-token 2400 \
-    --update-freq 6 \
+    --step-freq 6 \
     --optim adam --adam-betas 0.9 0.98 --lr 0.00025 \
     --warmup-step 0 \
     --scheduler cosine --step-per-period 200000 \

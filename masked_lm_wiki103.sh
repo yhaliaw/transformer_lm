@@ -10,13 +10,14 @@ if [ "$1" == "train" ]; then
     --train wiki.train.tokens --valid wiki.valid.tokens \
     --path workspace/wiki103 --tensorboard \
     --task masked_lm --context-type sent \
-    --train-token 1024 --max-token 1024 \
-    --update-freq 8 \
+    --train-token 8192 --max-token 8192 \
+    --step-freq 2 \
+    --eval-token 4096 --eval-max-token 4096 \
     --optim adam --adam-betas 0.9 0.98 --lr 0.00025 \
     --warmup-step 0 \
-    --scheduler cosine --step-per-period 400000 \
-    --period-decay 0.25 --min-lr 1e-9 \
-    --clip-norm 0.5 \
+    --scheduler cosine --step-per-period 200000 \
+    --period-decay 0.5 --min-lr 1e-9 \
+    --clip-norm 0.25 \
     --adaptive-input \
     --adaptive-softmax \
     --tied-adaptive \
@@ -35,7 +36,7 @@ elif [ "$1" == "eval" ]; then
   python3 "$ROOT"/eval.py --data data/wiki103 \
     --test test.txt \
     --task masked_lm --context-type sent \
-    --eval-token 2048 --max-token 2048 \
+    --eval-token 4096 --eval-max-token 4096 \
     --adaptive-input \
     --adaptive-softmax \
     --tied-adaptive \

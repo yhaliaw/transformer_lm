@@ -34,8 +34,10 @@ if [ "$1" == "train" ]; then
     "${@:2}"
 elif [ "$1" == "eval" ]; then
   echo "Evaluating masked language model on wikitext-103 data..."
-  python3 "$ROOT"/eval.py --data data/wiki103 \
-    --test test.txt \
+  python3 "$ROOT"/eval.py --data data/wikitext-103 \
+    --eval-valid \
+    --valid wiki.valid.tokens \
+    --test wiki.test.tokens \
     --task masked_lm --context-type sent \
     --eval-token 4096 --eval-max-token 4096 \
     --adaptive-input \

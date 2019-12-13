@@ -119,8 +119,9 @@ def setup_train(i, corpus, args):
     optimizer, scheduler = get_optimizer_scheduler(model, args)
 
     if args.fp16:
+        print("|  Floating point 16 precision setting:\n", end='')
         model, optimizer = amp.initialize(
-            model, optimizer, opt_level='O2', verbosity=False
+            model, optimizer, opt_level='O2'
         )
     if args.dist:
         model = DistributedDataParallel(model, device_ids=[i], find_unused_parameters=True)
@@ -203,6 +204,7 @@ def setup_train(i, corpus, args):
                 if 'out of memory' in str(e):
                     log.oom += 1
                     print(f"== Rank {args.rank}: Training out of memory. Skipping this batch. ==")
+                    # Release memory
                     if 'scaled_loss' in locals():
                         del scaled_loss
                     if 'loss' in locals():
@@ -327,9 +329,8 @@ def setup_train(i, corpus, args):
         if args.dist:
             dist.barrier()
 
-        best_loss = best_loss / math.log(2)
-        log.valid_add_scalar('best loss', best_loss, step)
-        log.valid_add_scalar('best ppl', 2 ** best_loss, step)
+        log.valid_add_scalar('best loss', best_loss / math.log(2), step)
+        log.valid_add_scalar('best ppl', 2 ** (best_loss / math.log(2)), step)
         return best_loss
 
     step = resume_step

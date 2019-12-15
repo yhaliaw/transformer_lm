@@ -10,9 +10,6 @@ from torch.nn import Parameter
 class ConstituentAttention(nn.Module):
     """Constituent attention as described in Tree Transformer.
 
-    Modified from official implementation at
-    https://github.com/yaushian/Tree-Transformer/blob/master/attention.py.
-
     See "Tree Transformer: Integrating Tree Structures into
     Self-Attention" for details: https://arxiv.org/abs/1909.06639
     """
@@ -33,55 +30,67 @@ class ConstituentAttention(nn.Module):
         self.reset_parameters()
 
     def forward(self, context, prior, padding_mask=None):
+        dtype = context.dtype
+        device = context.device
+
         # Convert to batch first
         # context: [seq x batch x embed_dim] -> [batch x seq x embed_dim]
-        device = context.device
-        context = context.transpose(1, 0)
+        context = context.permute(1, 0, 2)
         batch_size, seq_len, _ = context.size()
+        # Convert to torch.int as a hack to get around CUDA not supporting torch.roll() for torch.bool.
+        padding_mask = padding_mask.view(batch_size, seq_len).type(torch.int)
 
         # Apply linear transform.
         # [batch x seq x embed_dim] -> [batch x seq x proj_dim]
         query, key = F.linear(context, self.proj_weight, self.proj_bias).chunk(2, dim=2)
 
-        # Dot product between all query and key
-        # score: [batch x seq x seq]
-        score = torch.bmm(query, key.permute(0, 2, 1))
-        score = score / self.embed_dim  # Scale by dimension.
+        # Scaled dot product. Formula 5.
+        # forward, backward: [batch x seq x proj_dim]
+        # Forward is s_i,i+1, backward is s_i,i-1
+        forward_query = query[:, :-1, :]
+        forward_key = key[:, 1:, :]
+        backward_query = query[:, 1:, :]
+        backward_key = key[:, :-1, :]
+        forward = (forward_query * forward_key).sum(dim=-1) / self.embed_dim
+        backward = (backward_query * backward_key).sum(dim=-1) / self.embed_dim
 
-        upper_diag = torch.ones(seq_len - 1).diag(1).type(torch.bool).to(device)
-        diag = torch.ones(seq_len).diag(0).type(torch.bool).to(device)
-        lower_diag = torch.ones(seq_len - 1).diag(-1).type(torch.bool).to(device)
-        # Mask out non-neighboring dot product.
-        # mask: [batch x seq x seq]
-        # score: [batch x seq x seq]
+        # Softmax. Formula 6.
+        score = torch.ones((batch_size, seq_len, 2), dtype=dtype, device=device) * -math.inf
+        score[:, torch.arange(seq_len - 1), 0] = forward
+        score[:, torch.arange(1, seq_len), 1] = backward
         if padding_mask is not None:
-            mask = ~padding_mask & upper_diag + lower_diag
-        else:
-            mask = upper_diag + lower_diag
-        score = score.masked_fill(~mask, -1e9)
+            score[:, :, 0] = score[:, :, 0].masked_fill(padding_mask.roll(shifts=-1, dims=1) == 1, -math.inf)
+        prob = F.softmax(score, dim=-1)
 
-        # formula 6
-        # neighbor_attn: [batch x seq x seq]
-        neighbor_attn = F.softmax(score, dim=-1)
-        # formula 7
-        neighbor_attn = neighbor_attn * neighbor_attn.transpose(-2, -1) + 1e-9
-        neighbor_attn = neighbor_attn.sqrt()
-        # hierarchical constraint
-        neighbor_attn = prior + (1 - prior) * neighbor_attn
+        # Average. Formula 7.
+        shift_prob = prob[:, :, 1].roll(shifts=-1)
+        prob = (prob[:, :, 0] * shift_prob + 1e-6).sqrt()
 
+        # Hierarchical constraint. Formula 8.
+        neighbor_attn = prior + (1 - prior) * prob
+
+        # Compute the rest of probability, with log probability.
         upper_tri = torch.ones((batch_size, seq_len, seq_len)).triu().type(context.dtype).to(device)
-        # Build rest of attention matrix.
-        # log_prob: [batch x seq x seq]
-        log_prob = torch.log(neighbor_attn + 1e-9).masked_fill(~upper_diag, 0)
-        log_prob = torch.bmm(log_prob, upper_tri)
-        # Compute upper half.
-        # c_attn: [batch x seq x seq]
-        c_attn = torch.bmm(upper_tri, log_prob)
-        c_attn = c_attn.exp().masked_fill(diag, 0).masked_fill(upper_tri == 0, 0)
+        constituent_attn = torch.zeros((batch_size, seq_len, seq_len), dtype=dtype, device=device)
+        log_prob = torch.log(neighbor_attn)
+        if padding_mask is not None:
+            log_prob = log_prob.masked_fill(padding_mask.roll(shifts=-1, dims=1) == 1, 0)
+        # Compute the upper half
+        constituent_attn[:, torch.arange(seq_len -1), torch.arange(1, seq_len)] = log_prob[:, :-1]
+        constituent_attn = torch.bmm(constituent_attn, upper_tri)
+        constituent_attn = torch.bmm(upper_tri, constituent_attn)
         # Copy to lower half.
-        c_attn = c_attn + c_attn.transpose(-2, -1) + neighbor_attn.masked_fill(diag == 0, 1e-9)
+        constituent_attn = constituent_attn + constituent_attn.permute(0, 2, 1)
+        constituent_attn = constituent_attn.exp()
 
-        return c_attn, neighbor_attn
+        # Mask out self
+        diag = torch.ones(seq_len).diag(0).type(torch.bool).to(device)
+        constituent_attn = constituent_attn.masked_fill(diag, 0)
+
+        # if padding_mask is not None:
+        #     constituent_attn.masked_fill_(
+        #         (padding_mask[:, :, None] == 1) | (padding_mask[:, None, :] == 1), 0)
+        return constituent_attn, neighbor_attn
 
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.proj_weight)
@@ -132,6 +141,23 @@ class GroupAttention(nn.Module):
         return g_attn, neibor_attn
 
 
+class OfficialConstituentAttention(nn.Module):
+    """Wrapper for official implementation."""
+
+    def __init__(self, model_dim, proj_dim, bias=True):
+        assert model_dim == proj_dim, "Different projection dimension not supported."
+        assert bias, "No bias is not supported."
+        super().__init__()
+        grp_attn = GroupAttention(model_dim)
+
+    def forward(self, context, prior, padding_mask):
+        mask = padding_mask.type(torch.int)
+        context = context.permute(1, 0, 2)  # Convert to batch first.
+        weight, prior = self.grp_attn(context, prior, mask)
+        weight = weight.permute(1, 0, 2)  # Convert to sequence first.
+        return weight, prior
+
+
 # TODO replace with unit test
 if __name__ == '__main__':
     # 5 batch, 10 seq, 512 dim
@@ -148,9 +174,9 @@ if __name__ == '__main__':
     group_attn.linear_query.bias, group_attn.linear_key.bias = [nn.Parameter(i) for i in constituent_attn.proj_bias.chunk(2, dim=0)]
 
     output1, attn1 = group_attn(x, mask, prior)
-    output1, attn1 = group_attn(x, mask, attn1)
+    # output1, attn1 = group_attn(x, mask, attn1)
     mask = (mask == 0)
     output2, attn2 = constituent_attn(x.permute(1,0,2), prior, mask)
-    output2, attn2 = constituent_attn(x.permute(1,0,2), attn2, mask)
+    # output2, attn2 = constituent_attn(x.permute(1,0,2), attn2, mask)
 
     assert torch.equal(output1, output2)

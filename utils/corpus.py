@@ -62,21 +62,6 @@ def write_file(text, path):
             file.write(line + '\n')
 
 
-def file_split_sent(data, path, *files):
-    """Split the sent in each file and return the new filenames."""
-    filenames = []
-    for f in files:
-        if f is not None:
-            output = []
-            with open(os.path.join(data, f), 'r', encoding='utf-8') as text:
-                for line in tqdm(text, desc="Splitting sentences", unit=" line"):
-                    output += sent_tokenize(line)
-            f = f + '.sent'
-            write_file(output, os.path.join(path, f))
-        filenames.append(f)
-    return filenames
-
-
 class Vocab(object):
     """Stores the mapping between indexes and symbols.
 

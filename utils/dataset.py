@@ -65,6 +65,7 @@ def collate_data(data, pad_idx, left_pad=False):
     return padded_data
 
 
+# TODO refactor datatset classes. It turned into a spaghetti after too many changes.
 class LanguageModelDataset(IterableDataset):
     """A IterableDataset for language model with token based batch size.
 
@@ -90,7 +91,7 @@ class LanguageModelDataset(IterableDataset):
             tokens for context window.
         train_token: Max token for each sample in a batch. Excludes
             tokens for context window.
-        world_size: The world size for distributed training. Use defaulchicago foodt
+        world_size: The world size for distributed training. Use default
             value for CPU, or single GPU training.
         rank: The rank of process in distributed training. Use default
             value for CPU, or single GPU training.

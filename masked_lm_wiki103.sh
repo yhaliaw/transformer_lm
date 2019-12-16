@@ -9,7 +9,7 @@ if [ "$1" == "train" ]; then
   python3 "$ROOT"/train.py --data data/sent-wikitext-103 \
     --train wiki.train.tokens --valid wiki.valid.tokens \
     --path workspace/sent-wiki103 --tensorboard \
-    --task masked_lm --context-type sent \
+    --task masked_lm --context-type line \
     --train-token 4096 --max-token 4096 \
     --step-freq 4 \
     --eval-token 4096 --eval-max-token 4096 \
@@ -22,7 +22,6 @@ if [ "$1" == "train" ]; then
     --clip-norm 0.25 \
     --adaptive-input \
     --adaptive-softmax \
-    --tied-adaptive \
     --cutoff 20000 40000 \
     --num-layer 12 \
     --embed-dim 512 \
@@ -43,7 +42,6 @@ elif [ "$1" == "eval" ]; then
     --eval-token 4096 --eval-max-token 4096 \
     --adaptive-input \
     --adaptive-softmax \
-    --tied-adaptive \
     --cutoff 20000 40000 \
     --num-layer 12 \
     --embed-dim 512 \

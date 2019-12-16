@@ -1,5 +1,5 @@
 from .transformer_lm import TransformerLanguageModel
-from .tree_transformer import TreeTransformer
+from .tree_transformer import TreeTransformer, OriginalTreeTransformer
 
 
 def get_model(vocab, args):
@@ -7,6 +7,8 @@ def get_model(vocab, args):
         model = TransformerLanguageModel(vocab=vocab, args=args)
     elif args.arch == 'tree_transformer':
         model = TreeTransformer(vocab=vocab, args=args)
+    elif args.arch == 'original_tree_transformer':
+        model = OriginalTreeTransformer(vocab=vocab, args=args)
     return model
 
 

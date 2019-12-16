@@ -6,14 +6,14 @@ from models.transformer_lm import TransformerLanguageModel
 from modules.activation import gelu
 from modules.layer_norm import LayerNorm
 from modules.multihead_attention import MultiheadAttention
-from modules.constituent_attention import ConstituentAttention
+from modules.constituent_attention import ConstituentAttention, OriginalConstituentAttention
 from modules.transformer_layer import PositionWiseFeedForward, Sublayer
 
 
 class TreeTransformerLayer(nn.Module):
 
     def __init__(self, model_dim, num_head, inner_dim, dropout, attn_dropout=0., head_dim=None,
-                 bias=False, activation=gelu):
+                 bias=True, activation=gelu):
         super().__init__()
         self.model_dim = model_dim
         self.num_head = num_head
@@ -76,3 +76,26 @@ class TreeTransformer(TransformerLanguageModel):
         for encoder_layer in self.layer:
             x, prior = encoder_layer(x, prior, padding_mask)
         return x
+
+
+class OriginalTreeTransformerLayer(TreeTransformerLayer):
+
+    def __init__(self, model_dim, num_head, inner_dim, dropout, attn_dropout=0., head_dim=None,
+                 bias=True, activation=gelu):
+        super().__init__(model_dim, num_head, inner_dim, dropout, attn_dropout, head_dim, bias,
+                         activation)
+        self.constituent = OriginalConstituentAttention(model_dim, model_dim, bias)
+
+
+class OriginalTreeTransformer(TreeTransformer):
+
+    def __init__(self, vocab, args):
+        super().__init__(vocab, args)
+        self.layer = nn.ModuleList([])
+        self.layer.extend([
+            OriginalTreeTransformerLayer(
+                self.model_dim, self.num_head, self.inner_dim, self.dropout, self.attn_dropout,
+                self.head_dim, self.bias, self.activation
+            )
+            for _ in range(self.num_layer)
+        ])

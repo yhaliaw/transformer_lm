@@ -39,7 +39,7 @@ class TransformerLayer(nn.Module):
     https://arxiv.org/abs/1706.03762
     """
     def __init__(self, model_dim, num_head, inner_dim, dropout, attn_dropout=0., head_dim=None,
-                 bias=False, activation=F.relu):
+                 bias=True, activation=F.relu):
         super().__init__()
         self.model_dim = model_dim
         self.num_head = num_head

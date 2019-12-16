@@ -62,21 +62,21 @@ class ConstituentAttention(nn.Module):
             score[:, :, 0] = score[:, :, 0].masked_fill(padding_mask.roll(shifts=-1, dims=1) == 1, -math.inf)
         prob = F.softmax(score, dim=-1)
 
-        # Average. Formula 7.
+        # Average in log scale. Formula 7.
         shift_prob = prob[:, :, 1].roll(shifts=-1)
         prob = (prob[:, :, 0] * shift_prob + 1e-6).sqrt()
 
         # Hierarchical constraint. Formula 8.
         neighbor_attn = prior + (1 - prior) * prob
 
-        # Compute the rest of probability, with log probability.
+        # Compute the rest of log probability.
         upper_tri = torch.ones((batch_size, seq_len, seq_len)).triu().type(context.dtype).to(device)
         constituent_attn = torch.zeros((batch_size, seq_len, seq_len), dtype=dtype, device=device)
         log_prob = torch.log(neighbor_attn)
         if padding_mask is not None:
             log_prob = log_prob.masked_fill(padding_mask.roll(shifts=-1, dims=1) == 1, 0)
         # Compute the upper half
-        constituent_attn[:, torch.arange(seq_len -1), torch.arange(1, seq_len)] = log_prob[:, :-1]
+        constituent_attn[:, torch.arange(seq_len - 1), torch.arange(1, seq_len)] = log_prob[:, :-1]
         constituent_attn = torch.bmm(constituent_attn, upper_tri)
         constituent_attn = torch.bmm(upper_tri, constituent_attn)
         # Copy to lower half.
@@ -97,14 +97,20 @@ class ConstituentAttention(nn.Module):
         if self.proj_bias is not None:
             nn.init.constant_(self.proj_bias, 0.)
 
+    def extra_repr(self):
+        return f"{self.embed_dim}, {self.proj_dim}, bias={self.bias}"
+
 
 # The official implementation.
 # Retrieved from: https://github.com/yaushian/Tree-Transformer/blob/master/attention.py
+# Changes:
+# Fix the hardcoded self.d_model: self.d_model = 256  ->  self.d_model = d_model
 # The LayerNorm is commented out as it is handled elsewhere.
+# The .cuda() is changed to .to(context.device), so it works on both CPU and GPU.
 class GroupAttention(nn.Module):
     def __init__(self, d_model, dropout=0.8):
         super(GroupAttention, self).__init__()
-        self.d_model = 256.
+        self.d_model = d_model
         self.linear_key = nn.Linear(d_model, d_model)
         self.linear_query = nn.Linear(d_model, d_model)
         # self.linear_output = nn.Linear(d_model, d_model)
@@ -116,9 +122,9 @@ class GroupAttention(nn.Module):
 
         # context = self.norm(context)
 
-        a = torch.from_numpy(np.diag(np.ones(seq_len - 1, dtype=np.int32), 1))
-        b = torch.from_numpy(np.diag(np.ones(seq_len, dtype=np.int32), 0))
-        c = torch.from_numpy(np.diag(np.ones(seq_len - 1, dtype=np.int32), -1))
+        a = torch.from_numpy(np.diag(np.ones(seq_len - 1, dtype=np.int32), 1)).to(context.device)
+        b = torch.from_numpy(np.diag(np.ones(seq_len, dtype=np.int32), 0)).to(context.device)
+        c = torch.from_numpy(np.diag(np.ones(seq_len - 1, dtype=np.int32), -1)).to(context.device)
         tri_matrix = torch.from_numpy(np.triu(np.ones([seq_len, seq_len], dtype=np.float32), 0))
 
         # mask = eos_mask & (a+c) | b
@@ -141,7 +147,7 @@ class GroupAttention(nn.Module):
         return g_attn, neibor_attn
 
 
-class OfficialConstituentAttention(nn.Module):
+class OriginalConstituentAttention(nn.Module):
     """Wrapper for official implementation."""
 
     def __init__(self, model_dim, proj_dim, bias=True):
@@ -156,6 +162,9 @@ class OfficialConstituentAttention(nn.Module):
         weight, prior = self.grp_attn(context, prior, mask)
         weight = weight.permute(1, 0, 2)  # Convert to sequence first.
         return weight, prior
+
+    def extra_repr(self):
+        return f"{self.embed_dim}, {self.proj_dim}, bias={self.bias}"
 
 
 # TODO replace with unit test

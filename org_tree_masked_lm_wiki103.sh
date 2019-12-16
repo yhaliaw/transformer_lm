@@ -29,7 +29,7 @@ if [ "$1" == "train" ]; then
     --inner-dim 2048 \
     --dropout 0.1 \
     --activation gelu \
-    --arch tree_transformer \
+    --arch original_tree_transformer \
     --cuda --fp16 \
     --run-name masked_lm_tree_layer_12 \
     "${@:2}"
@@ -50,7 +50,7 @@ elif [ "$1" == "eval" ]; then
     --inner-dim 2048 \
     --dropout 0.1 \
     --activation gelu \
-    --arch tree_transformer \
+    --arch original_tree_transformer \
     --cuda --fp16 \
     --checkpoint workspace/sent-wiki103/masked_lm_tree_layer_12/checkpoint/checkpoint_best.pt \
     "${@:2}"

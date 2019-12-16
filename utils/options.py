@@ -227,7 +227,7 @@ def dataloading_args(parser):
 
 def model_args(parser):
     parser.add_argument('--arch', type=str, default='transformer',
-                        choices=['transformer', 'tree_transformer'],
+                        choices=['transformer', 'tree_transformer', 'original_tree_transformer'],
                         help="The architecture to use.")
     parser.add_argument('--adaptive-input', action='store_true',
                         help="Use adaptive input embedding.")

@@ -38,7 +38,7 @@ elif [ "$1" == "eval" ]; then
     --eval-valid \
     --valid wiki.valid.tokens \
     --test wiki.test.tokens \
-    --task masked_lm --context-type sent \
+    --task masked_lm --context-type line \
     --eval-token 4096 --eval-max-token 4096 \
     --adaptive-input \
     --adaptive-softmax \

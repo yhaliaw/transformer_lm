@@ -227,7 +227,8 @@ def dataloading_args(parser):
 
 def model_args(parser):
     parser.add_argument('--arch', type=str, default='transformer',
-                        choices=['transformer', 'tree_transformer', 'original_tree_transformer'],
+                        choices=['transformer', 'tree_transformer', 'original_tree_transformer',
+                                 'recurrent_tree_transformer'],
                         help="The architecture to use.")
     parser.add_argument('--adaptive-input', action='store_true',
                         help="Use adaptive input embedding.")
@@ -277,3 +278,8 @@ def model_args(parser):
                         help="Dropout for model.")
     parser.add_argument('--attn-dropout', type=float, default=0.,
                         help="Dropout for attention.")
+
+    # Experiments
+    parser.add_argument('--attn-type', type=str,
+                        choices=['recurrent_dot_product'],
+                        help="Type of attention for recurrent tree transformer.")

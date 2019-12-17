@@ -10,9 +10,9 @@ if [ "$1" == "train" ]; then
     --train wiki.train.tokens --valid wiki.valid.tokens \
     --path workspace/sent-wiki103 --tensorboard \
     --task masked_lm --context-type line \
-    --train-token 4096 --max-token 4096 \
-    --step-freq 4 \
-    --eval-token 4096 --eval-max-token 4096 \
+    --train-token 2048 --max-token 2048 \
+    --step-freq 8 \
+    --eval-token 2048 --eval-max-token 2048 \
     --optim adam --adam-betas 0.9 0.98 --lr 0.00025 \
     --warmup-step 0 \
     --scheduler cosine \
@@ -30,8 +30,8 @@ if [ "$1" == "train" ]; then
     --dropout 0.1 \
     --activation gelu \
     --arch original_tree_transformer \
-    --cuda --fp16 \
-    --run-name masked_lm_tree_layer_12 \
+    --cuda \
+    --run-name masked_lm_org_tree_layer_12 \
     "${@:2}"
 elif [ "$1" == "eval" ]; then
   echo "Evaluating masked language model on wikitext-103 data..."
@@ -39,8 +39,8 @@ elif [ "$1" == "eval" ]; then
     --eval-valid \
     --valid wiki.valid.tokens \
     --test wiki.test.tokens \
-    --task masked_lm --context-type sent \
-    --eval-token 4096 --eval-max-token 4096 \
+    --task masked_lm --context-type line \
+    --eval-token 2048 --eval-max-token 2048 \
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 \
@@ -51,8 +51,8 @@ elif [ "$1" == "eval" ]; then
     --dropout 0.1 \
     --activation gelu \
     --arch original_tree_transformer \
-    --cuda --fp16 \
-    --checkpoint workspace/sent-wiki103/masked_lm_tree_layer_12/checkpoint/checkpoint_best.pt \
+    --cuda \
+    --checkpoint workspace/sent-wiki103/masked_lm_org_tree_layer_12/checkpoint/checkpoint_best.pt \
     "${@:2}"
 else
   echo "Specify 'train' or 'eval'."

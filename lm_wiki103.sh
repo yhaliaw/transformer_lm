@@ -19,7 +19,6 @@ if [ "$1" == "train" ]; then
     --clip-norm 0.1 \
     --adaptive-input \
     --adaptive-softmax \
-    --tied-adaptive \
     --cutoff 20000 40000 200000 \
     --num-layer 12 \
     --embed-dim 512 \
@@ -39,7 +38,6 @@ elif [ "$1" == "eval" ]; then
     --context-size 1024 --eval-token 1024 --eval-max-token 4096 \
     --adaptive-input \
     --adaptive-softmax \
-    --tied-adaptive \
     --cutoff 20000 40000 200000 \
     --num-layer 12 \
     --embed-dim 512 \

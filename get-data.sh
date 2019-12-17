@@ -30,5 +30,5 @@ if [ -d sent-wikitext-103 ]; then
   echo "Found sentence level wikitext-103, skipping processing."
 else
   echo "Processing wikitext-103 into sentences..."
-  python3 ../utils/sentencize_wikitext.py --data wikitext-103 --path sent-wikitext-103
+  python3 ../utils/sentencize_wikitext.py --data wikitext-103 --path sent-wikitext-103 --max-length 50
 fi

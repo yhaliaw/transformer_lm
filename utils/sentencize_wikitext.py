@@ -17,6 +17,8 @@ if __name__ == "__main__":
                         help="Path to a directory containing wikitext.")
     parser.add_argument('--path', type=str, required=True,
                         help="Path to store the sentencized wikitext.")
+    parser.add_argument('--min-length', type=int, default=3)
+    parser.add_argument('--max-length', type=int, default=50)
     args = parser.parse_args()
 
     if not os.path.isdir(args.path):
@@ -42,10 +44,11 @@ if __name__ == "__main__":
                 num_line_keep += 1
                 sent_lst = split_list(line, '.')  # Split list on '.' token
                 for lst in sent_lst:
-                    num_sent += 1
-                    num_sent_token += len(lst)
-                    sent_line = ' '.join(lst)
-                    sent.write(sent_line + '\n')
+                    if args.min_length <= len(lst) <= args.max_length:
+                        num_sent += 1
+                        num_sent_token += len(lst)
+                        sent_line = ' '.join(lst)
+                        sent.write(sent_line + '\n')
 
         print(f"== File: {filename} ==\n"
               f"|  line count: {num_line} -> {num_line_keep}\n"

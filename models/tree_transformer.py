@@ -6,7 +6,8 @@ from models.transformer_lm import TransformerLanguageModel
 from modules.activation import gelu
 from modules.layer_norm import LayerNorm
 from modules.multihead_attention import MultiheadAttention
-from modules.constituent_attention import ConstituentAttention, OriginalConstituentAttention
+from modules.constituent_attention import ConstituentAttention, OriginalConstituentAttention, \
+    RecurrentConstituentAttention
 from modules.transformer_layer import PositionWiseFeedForward, Sublayer
 
 
@@ -76,6 +77,29 @@ class TreeTransformer(TransformerLanguageModel):
         for encoder_layer in self.layer:
             x, prior = encoder_layer(x, prior, padding_mask)
         return x
+
+
+class RecurrentTreeTransformerLayer(TreeTransformerLayer):
+
+    def __init__(self, model_dim, num_head, inner_dim, dropout, attn_dropout=0., head_dim=None,
+                 bias=True, activation=gelu, attn_type=None):
+        super().__init__(model_dim, num_head, inner_dim, dropout, attn_dropout, head_dim, bias,
+                         activation)
+        self.constituent = RecurrentConstituentAttention(model_dim, model_dim, bias, attn_type)
+
+
+class RecurrentTreeTransformer(TreeTransformer):
+
+    def __init__(self, vocab, args):
+        super().__init__(vocab, args)
+        self.layer = nn.ModuleList([])
+        self.layer.extend([
+            RecurrentTreeTransformerLayer(
+                self.model_dim, self.num_head, self.inner_dim, self.dropout, self.attn_dropout,
+                self.head_dim, self.bias, self.activation, args.attn_type
+            )
+            for _ in range(self.num_layer)
+        ])
 
 
 class OriginalTreeTransformerLayer(TreeTransformerLayer):

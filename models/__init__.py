@@ -1,5 +1,5 @@
 from .transformer_lm import TransformerLanguageModel
-from .tree_transformer import TreeTransformer, OriginalTreeTransformer
+from .tree_transformer import TreeTransformer, OriginalTreeTransformer, RecurrentTreeTransformer
 
 
 def get_model(vocab, args):
@@ -9,6 +9,10 @@ def get_model(vocab, args):
         model = TreeTransformer(vocab=vocab, args=args)
     elif args.arch == 'original_tree_transformer':
         model = OriginalTreeTransformer(vocab=vocab, args=args)
+    elif args.arch == 'recurrent_tree_transformer':
+        model = RecurrentTreeTransformer(vocab=vocab, args=args)
+    else:
+        raise NotImplementedError
     return model
 
 

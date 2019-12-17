@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Parameter
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 
 class ConstituentAttention(nn.Module):
@@ -21,24 +21,21 @@ class ConstituentAttention(nn.Module):
         self.bias = bias
 
         # Parameters
-        self.proj_weight = Parameter(torch.Tensor(self.proj_dim * 2, self.embed_dim))
-        if bias:
-            self.proj_bias = Parameter(torch.Tensor(self.proj_dim * 2))
-        else:
-            self.register_parameter('proj_bias', None)
+        self.create_parameters()
 
         self.reset_parameters()
 
-    def forward(self, context, prior, padding_mask=None):
+    def create_parameters(self):
+        self.proj_weight = nn.Parameter(torch.Tensor(self.proj_dim * 2, self.embed_dim))
+        if self.bias:
+            self.proj_bias = nn.Parameter(torch.Tensor(self.proj_dim * 2))
+        else:
+            self.register_parameter('proj_bias', None)
+
+    def neighbor_attention(self, context, padding_mask=None):
         dtype = context.dtype
         device = context.device
-
-        # Convert to batch first
-        # context: [seq x batch x embed_dim] -> [batch x seq x embed_dim]
-        context = context.permute(1, 0, 2)
         batch_size, seq_len, _ = context.size()
-        # Convert to torch.int as a hack to get around CUDA not supporting torch.roll() for torch.bool.
-        padding_mask = padding_mask.view(batch_size, seq_len).type(torch.int)
 
         # Apply linear transform.
         # [batch x seq x embed_dim] -> [batch x seq x proj_dim]
@@ -65,9 +62,26 @@ class ConstituentAttention(nn.Module):
         # Average in log scale. Formula 7.
         shift_prob = prob[:, :, 1].roll(shifts=-1)
         prob = (prob[:, :, 0] * shift_prob + 1e-6).sqrt()
+        return prob
+
+    def forward(self, context, prior, padding_mask=None):
+        dtype = context.dtype
+        device = context.device
+
+        # Convert to batch first
+        # context: [seq x batch x embed_dim] -> [batch x seq x embed_dim]
+        context = context.permute(1, 0, 2)
+        batch_size, seq_len, _ = context.size()
+        # Convert to torch.int as a hack to get around torch.roll() not
+        # supported for torch.bool on GPU.
+        if padding_mask is not None:
+            padding_mask = padding_mask.view(batch_size, seq_len).type(torch.int)
+
+        # Neighboring attention.
+        neighbor_attn = self.neighbor_attention(context, padding_mask)
 
         # Hierarchical constraint. Formula 8.
-        neighbor_attn = prior + (1 - prior) * prob
+        neighbor_attn = prior + (1 - prior) * neighbor_attn
 
         # Compute the rest of log probability.
         upper_tri = torch.ones((batch_size, seq_len, seq_len)).triu().type(context.dtype).to(device)
@@ -87,9 +101,9 @@ class ConstituentAttention(nn.Module):
         diag = torch.ones(seq_len).diag(0).type(torch.bool).to(device)
         constituent_attn = constituent_attn.masked_fill(diag, 0)
 
-        # if padding_mask is not None:
-        #     constituent_attn.masked_fill_(
-        #         (padding_mask[:, :, None] == 1) | (padding_mask[:, None, :] == 1), 0)
+        if padding_mask is not None:
+            constituent_attn.masked_fill_(
+                (padding_mask[:, :, None] == 1) | (padding_mask[:, None, :] == 1), 0)
         return constituent_attn, neighbor_attn
 
     def reset_parameters(self):
@@ -98,7 +112,91 @@ class ConstituentAttention(nn.Module):
             nn.init.constant_(self.proj_bias, 0.)
 
     def extra_repr(self):
-        return f"{self.embed_dim}, {self.proj_dim}, bias={self.bias}"
+        return f"(dot_product_attn){self.embed_dim}, {self.proj_dim}, bias={self.bias}"
+
+
+class RecurrentConstituentAttention(ConstituentAttention):
+    """Constituent attention with recurrence.
+
+    Assumes padding are at the end of the sequence.
+    """
+
+    def __init__(self, embed_dim, proj_dim, bias=True, attn_type=None):
+        self.attn_type = attn_type
+        if self.attn_type == 'recurrent_dot_product':
+            self.attn = self.recurrent_dot_product
+        else:
+            raise NotImplementedError
+        super().__init__(embed_dim, proj_dim, bias)
+
+    def create_parameters(self):
+        if self.attn_type == 'recurrent_dot_product':
+            self.forward_lstm = nn.LSTM(
+                self.embed_dim, self.proj_dim, bias=self.bias, batch_first=True
+            )
+            self.backward_lstm = nn.LSTM(
+                self.embed_dim, self.proj_dim, bias=self.bias, batch_first=True
+            )
+            self.proj_weight = nn.Parameter(torch.Tensor(self.proj_dim * 2, self.embed_dim))
+            if self.bias:
+                self.proj_bias = nn.Parameter(torch.Tensor(self.proj_dim * 2))
+            else:
+                self.register_parameter('proj_bias', None)
+
+    def reset_parameters(self):
+        if self.attn_type == 'recurrent_dot_product':
+            nn.init.xavier_uniform_(self.proj_weight)
+            if self.proj_bias is not None:
+                nn.init.constant_(self.proj_bias, 0.)
+
+    def neighbor_attention(self, context, padding_mask=None):
+        return self.attn(context, padding_mask)
+
+    def recurrent_dot_product(self, context, padding_mask=None):
+        dtype = context.dtype
+        device = context.device
+        batch_size, seq_len, _ = context.size()
+
+        length = (padding_mask == 0).sum(dim=-1)
+
+        # Apply LSTM
+        # [seq x batch x embed_dim] -> [seq x batch x proj_dim]
+        forward_context = context
+        backward_context = context.flip(dims=[-1])
+        forward_context = pack_padded_sequence(forward_context, length, batch_first=True, enforce_sorted=False)
+        backward_context = pack_padded_sequence(backward_context, length, batch_first=True, enforce_sorted=False)
+        forward, _ = self.forward_lstm(forward_context)
+        backward, _ = self.backward_lstm(backward_context)
+        forward, _ = pad_packed_sequence(forward, batch_first=True, total_length=seq_len)
+        backward, _ = pad_packed_sequence(backward, batch_first=True, total_length=seq_len)
+
+        # Apply linear transform.
+        # [batch x seq x embed_dim] -> [batch x seq x proj_dim]
+        backward_query, forward_key = F.linear(forward, self.proj_weight, self.proj_bias).chunk(2, dim=2)
+        forward_query, backward_key = F.linear(backward, self.proj_weight, self.proj_bias).chunk(2, dim=2)
+
+        # Scaled dot product. Formula 5.
+        # forward, backward: [batch x seq x proj_dim]
+        # Forward is s_i,i+1, backward is s_i,i-1
+        forward_query = forward_query[:, :-1, :]
+        forward_key = forward_key[:, 1:, :]
+        backward_query = backward_query[:, 1:, :]
+        backward_key = backward_key[:, :-1, :]
+        forward = (forward_query * forward_key).sum(dim=-1) / self.embed_dim
+        backward = (backward_query * backward_key).sum(dim=-1) / self.embed_dim
+
+        # Softmax. Formula 6.
+        score = torch.ones((batch_size, seq_len, 2), dtype=dtype, device=device) * -math.inf
+        score[:, torch.arange(seq_len - 1), 0] = forward
+        score[:, torch.arange(1, seq_len), 1] = backward
+        if padding_mask is not None:
+            score[:, :, 0] = score[:, :, 0].masked_fill(padding_mask.roll(shifts=-1, dims=1) == 1, -math.inf)
+        prob = F.softmax(score, dim=-1)
+
+        # Average in log scale. Formula 7.
+        shift_prob = prob[:, :, 1].roll(shifts=-1)
+        prob = (prob[:, :, 0] * shift_prob + 1e-6).sqrt()
+        return prob
 
 
 # The official implementation.
@@ -125,7 +223,7 @@ class GroupAttention(nn.Module):
         a = torch.from_numpy(np.diag(np.ones(seq_len - 1, dtype=np.int32), 1)).to(context.device)
         b = torch.from_numpy(np.diag(np.ones(seq_len, dtype=np.int32), 0)).to(context.device)
         c = torch.from_numpy(np.diag(np.ones(seq_len - 1, dtype=np.int32), -1)).to(context.device)
-        tri_matrix = torch.from_numpy(np.triu(np.ones([seq_len, seq_len], dtype=np.float32), 0))
+        tri_matrix = torch.from_numpy(np.triu(np.ones([seq_len, seq_len], dtype=np.float32), 0)).to(context.device)
 
         # mask = eos_mask & (a+c) | b
         mask = eos_mask & (a + c)
@@ -150,17 +248,19 @@ class GroupAttention(nn.Module):
 class OriginalConstituentAttention(nn.Module):
     """Wrapper for official implementation."""
 
-    def __init__(self, model_dim, proj_dim, bias=True):
-        assert model_dim == proj_dim, "Different projection dimension not supported."
+    def __init__(self, embed_dim, proj_dim, bias=True):
+        assert embed_dim == proj_dim, "Different projection dimension not supported."
         assert bias, "No bias is not supported."
         super().__init__()
-        grp_attn = GroupAttention(model_dim)
+        self.embed_dim = embed_dim
+        self.proj_dim = proj_dim
+        self.bias = bias
+        self.grp_attn = GroupAttention(embed_dim)
 
     def forward(self, context, prior, padding_mask):
         mask = padding_mask.type(torch.int)
         context = context.permute(1, 0, 2)  # Convert to batch first.
-        weight, prior = self.grp_attn(context, prior, mask)
-        weight = weight.permute(1, 0, 2)  # Convert to sequence first.
+        weight, prior = self.grp_attn(context, mask, prior)
         return weight, prior
 
     def extra_repr(self):
@@ -172,7 +272,8 @@ if __name__ == '__main__':
     # 5 batch, 10 seq, 512 dim
     x = torch.normal(mean=0., std=1., size=(5, 10, 256))
     mask = torch.ones((5, 10), dtype=torch.int)
-    mask[:, 7:] = 0
+    mask[0, 9:] = 0
+    mask[1:3, 5:] = 0
     mask = mask[:, None, :]
     prior = torch.zeros(1)
 
@@ -183,9 +284,14 @@ if __name__ == '__main__':
     group_attn.linear_query.bias, group_attn.linear_key.bias = [nn.Parameter(i) for i in constituent_attn.proj_bias.chunk(2, dim=0)]
 
     output1, attn1 = group_attn(x, mask, prior)
-    # output1, attn1 = group_attn(x, mask, attn1)
+    for _ in range(1):
+        output1, attn1 = group_attn(x, mask, attn1)
     mask = (mask == 0)
-    output2, attn2 = constituent_attn(x.permute(1,0,2), prior, mask)
-    # output2, attn2 = constituent_attn(x.permute(1,0,2), attn2, mask)
+    output2, attn2 = constituent_attn(x.permute(1, 0, 2), prior, mask)
+    for _ in range(1):
+        output2, attn2 = constituent_attn(x.permute(1, 0, 2), attn2, mask)
+
+    r = RecurrentConstituentAttention(256, 256)
+    output3, attn3 = r(x.permute(1, 0, 2), prior, mask)
 
     assert torch.equal(output1, output2)

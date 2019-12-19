@@ -135,7 +135,7 @@ def setup_train(i, corpus, args):
                                                         optimizer, scheduler, amp)
         else:
             resume_step, resume_epoch = load_checkpoint(args.checkpoint, args.device, model,
-                                                         optimizer, scheduler)
+                                                        optimizer, scheduler)
 
         def update_dropout(module):
             if hasattr(module, 'dropout'):
@@ -179,7 +179,6 @@ def setup_train(i, corpus, args):
             epoch_num_target += num_target
             log.num_target += num_target
             log.batch_size += len(batch['num_target'])
-
             try:
                 feature = batch['feature'].to(args.device)
                 target = batch['target'].to(args.device)
@@ -374,13 +373,16 @@ def setup_train(i, corpus, args):
         if args.max_epoch is not None and epoch >= args.max_epoch:
             break
 
-
+# The checkpoint stores the optimizer itself, rather than the state_dict.
+# This is to get around the current Apex amp bug with opt_level O2.
+# Without it resuming training will see a massive increase in loss.
+# It is unsure what is root cause, but it is likely the _amp_stash in optimizer.
 def save_checkpoint(path, step, epoch, model, optimizer=None, scheduler=None, amp=None):
     if isinstance(model, DistributedDataParallel):
         model = model.module
     checkpoint = {'step': step, 'epoch': epoch, 'model': model.state_dict()}
     if optimizer is not None:
-        checkpoint['optimizer'] = optimizer.state_dict()
+        checkpoint['optimizer'] = optimizer
     if scheduler is not None:
         checkpoint['scheduler'] = scheduler.state_dict()
     if amp is not None:
@@ -394,7 +396,7 @@ def load_checkpoint(path, device, model, optimizer=None, scheduler=None, amp=Non
     checkpoint = torch.load(path, map_location=device)
     model.load_state_dict(checkpoint['model'])
     if optimizer is not None:
-        optimizer.load_state_dict(checkpoint['optimizer'])
+        optimizer = checkpoint['optimizer']  # See comment above save_checkpoint().
     if scheduler is not None:
         scheduler.load_state_dict(checkpoint['scheduler'])
     if amp is not None:

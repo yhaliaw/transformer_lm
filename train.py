@@ -263,10 +263,8 @@ def setup_train(i, corpus, args):
             else:
                 scheduler.step()
 
-        if step % args.log_freq == 0:
-            lr = optimizer.param_groups[0]['lr']
-
-            log.train(step, lr, loss_scale)
+        lr = optimizer.param_groups[0]['lr']
+        log.train(step, lr, loss_scale)
 
         if i == 0 and args.step_per_save != 0 and step % args.step_per_save == 0:
             path = os.path.join(args.checkpoint_dir, f'checkpoint-{epoch}-{step}.pt')

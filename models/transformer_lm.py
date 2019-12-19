@@ -86,7 +86,7 @@ class TransformerLanguageModel(nn.Module):
         padding_mask = padding_mask.permute(1, 0)
         if self.self_attn_mask:  # Mask out subsequent positions.
             # self_attn_mask: [seq x seq]
-            self_attn_mask = subsequent_mask(seq_len).to(x.device)
+            self_attn_mask = subsequent_mask(seq_len, x.device)
             # mask: [batch x seq x seq]
             # The first token can not be padding.
             mask = padding_mask[:, None, :] | self_attn_mask[None, :, :]

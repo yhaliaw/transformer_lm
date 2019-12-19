@@ -35,8 +35,6 @@ def train_argparser():
                              "workspace (see --path).")
     parser.add_argument('--log-norm', action='store_true',
                         help="Log the norm of each parameter at every step. Used for debugging.")
-    parser.add_argument('--log-freq', type=int, default=1,
-                        help="Number of steps between each log.")
     parser.add_argument('--step-per-save', type=int, default=0,
                         help="Step between each checkpoint.")
     parser.add_argument('--epoch-per-save', type=int, default=1,

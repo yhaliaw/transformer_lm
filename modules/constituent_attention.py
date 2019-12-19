@@ -84,22 +84,22 @@ class ConstituentAttention(nn.Module):
         neighbor_attn = prior + (1 - prior) * neighbor_attn
 
         # Compute the rest of log probability.
-        upper_tri = torch.ones((batch_size, seq_len, seq_len)).triu().type(context.dtype).to(device)
+        upper_tri = torch.ones((seq_len, seq_len), dtype=dtype, device=device).triu_()[None, :, :]
         constituent_attn = torch.zeros((batch_size, seq_len, seq_len), dtype=dtype, device=device)
         log_prob = torch.log(neighbor_attn)
         if padding_mask is not None:
             log_prob = log_prob.masked_fill(padding_mask.roll(shifts=-1, dims=1) == 1, 0)
         # Compute the upper half
         constituent_attn[:, torch.arange(seq_len - 1), torch.arange(1, seq_len)] = log_prob[:, :-1]
-        constituent_attn = torch.bmm(constituent_attn, upper_tri)
-        constituent_attn = torch.bmm(upper_tri, constituent_attn)
+        constituent_attn = torch.matmul(constituent_attn, upper_tri)
+        constituent_attn = torch.matmul(upper_tri, constituent_attn)
         # Copy to lower half.
         constituent_attn = constituent_attn + constituent_attn.permute(0, 2, 1)
         constituent_attn = constituent_attn.exp()
 
         # Mask out self
-        diag = torch.ones(seq_len).diag(0).type(torch.bool).to(device)
-        constituent_attn = constituent_attn.masked_fill(diag, 0)
+        diag = torch.ones(seq_len, device=device).diag(0)
+        constituent_attn = constituent_attn.masked_fill(diag == 1, 0)
 
         if padding_mask is not None:
             constituent_attn.masked_fill_(
@@ -272,8 +272,7 @@ if __name__ == '__main__':
     # 5 batch, 10 seq, 512 dim
     x = torch.normal(mean=0., std=1., size=(5, 10, 256))
     mask = torch.ones((5, 10), dtype=torch.int)
-    mask[0, 9:] = 0
-    mask[1:3, 5:] = 0
+    mask[:3, 5:] = 0
     mask = mask[:, None, :]
     prior = torch.zeros(1)
 
@@ -290,8 +289,5 @@ if __name__ == '__main__':
     output2, attn2 = constituent_attn(x.permute(1, 0, 2), prior, mask)
     for _ in range(1):
         output2, attn2 = constituent_attn(x.permute(1, 0, 2), attn2, mask)
-
-    r = RecurrentConstituentAttention(256, 256)
-    output3, attn3 = r(x.permute(1, 0, 2), prior, mask)
 
     assert torch.equal(output1, output2)

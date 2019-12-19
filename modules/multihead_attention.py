@@ -167,7 +167,7 @@ if __name__ == '__main__':
     from time import time
     # Test implementation is same as PyTorch implementation of F.multi_head_attention_forward.
     from modules.utils import subsequent_mask
-    sub_mask = subsequent_mask(1024).cuda()
+    sub_mask = subsequent_mask(1024, 'cuda')
     padding_mask = torch.zeros(4, 1024, dtype=torch.bool).cuda()
     padding_mask[0][7:] = 1
     padding_mask[1][1:] = 1

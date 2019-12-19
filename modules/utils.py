@@ -6,9 +6,9 @@ import torch.nn.functional as F
 from torch.nn.parameter import Parameter
 
 
-def subsequent_mask(size):
+def subsequent_mask(size, device):
     """Mask for masked self attention."""
-    return torch.triu(torch.ones((size, size), dtype=torch.bool), 1)
+    return torch.triu(torch.ones((size, size), dtype=torch.bool, device=device), 1)
 
 
 class Linear(nn.Module):

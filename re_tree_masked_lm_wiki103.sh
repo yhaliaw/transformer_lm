@@ -32,7 +32,7 @@ if [ "$1" == "train" ]; then
     --arch recurrent_tree_transformer \
     --attn-type recurrent_dot_product \
     --cuda --fp16 \
-    --run-name masked_lm_tree_layer_12 \
+    --run-name masked_lm_re_tree_layer_12 \
     "${@:2}"
 elif [ "$1" == "eval" ]; then
   echo "Evaluating masked language model on wikitext-103 data..."
@@ -54,7 +54,7 @@ elif [ "$1" == "eval" ]; then
     --arch recurrent_tree_transformer \
     --attn-type recurrent_dot_product \
     --cuda --fp16 \
-    --checkpoint workspace/sent-wiki103/masked_lm_tree_layer_12/checkpoint/checkpoint_best.pt \
+    --checkpoint workspace/sent-wiki103/masked_lm_re_tree_layer_12/checkpoint/checkpoint_best.pt \
     "${@:2}"
 else
   echo "Specify 'train' or 'eval'."

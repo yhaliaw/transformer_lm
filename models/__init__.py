@@ -1,10 +1,13 @@
 from .transformer_lm import TransformerLanguageModel
+from .dynamic_depth_transformer import SingleLayerTransformer
 from .tree_transformer import TreeTransformer, OriginalTreeTransformer, RecurrentTreeTransformer
 
 
 def get_model(vocab, args):
     if args.arch == 'transformer':
         model = TransformerLanguageModel(vocab=vocab, args=args)
+    elif args.arch == 'single_layer_transformer':
+        model = SingleLayerTransformer(vocab=vocab, args=args)
     elif args.arch == 'tree_transformer':
         model = TreeTransformer(vocab=vocab, args=args)
     elif args.arch == 'original_tree_transformer':

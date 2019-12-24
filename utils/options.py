@@ -225,7 +225,11 @@ def dataloading_args(parser):
 
 def model_args(parser):
     parser.add_argument('--arch', type=str, default='transformer',
-                        choices=['transformer', 'tree_transformer', 'original_tree_transformer',
+                        choices=['transformer',
+                                 'single_layer_transformer',
+                                 # Old
+                                 'tree_transformer',
+                                 'original_tree_transformer',
                                  'recurrent_tree_transformer'],
                         help="The architecture to use.")
     parser.add_argument('--adaptive-input', action='store_true',
@@ -270,14 +274,18 @@ def model_args(parser):
     parser.add_argument('--activation', type=str, default='relu',
                         choices=['relu', 'gelu'],
                         help="Activation function for position wise feed forward.")
-    parser.add_argument('--tied-layer', action='store_true',
-                        help="Share all parameters between transformer layers.")
     parser.add_argument('--dropout', type=float, default=0.2,
                         help="Dropout for model.")
     parser.add_argument('--attn-dropout', type=float, default=0.,
                         help="Dropout for attention.")
 
     # Experiments
+    parser.add_argument('--layer-dropout', type=float, default=0.,
+                        help="Dropout for each layer.")
+    parser.add_argument('--eval-num-layer', type=int,
+                        help="Number of layers during evaluation.")
+
+    # Old Experiments
     parser.add_argument('--attn-type', type=str,
                         choices=['recurrent_dot_product'],
                         help="Type of attention for recurrent tree transformer.")

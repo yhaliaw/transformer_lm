@@ -266,13 +266,14 @@ def setup_train(i, corpus, args):
         lr = optimizer.param_groups[0]['lr']
         log.train(step, lr, loss_scale)
 
-        if i == 0 and args.step_per_save != 0 and step % args.step_per_save == 0:
-            path = os.path.join(args.checkpoint_dir, f'checkpoint-{epoch}-{step}.pt')
-            save_checkpoint(path, step, epoch, model, optimizer, scheduler,
-                            amp if args.fp16 else None)
-            copyfile(path, os.path.join(args.checkpoint_dir, 'checkpoint_last.pt'))
-        if args.dist:
-            dist.barrier()
+        if args.step_per_save != 0 and step % args.step_per_save == 0:
+            if i == 0:
+                path = os.path.join(args.checkpoint_dir, f'checkpoint-{epoch}-{step}.pt')
+                save_checkpoint(path, step, epoch, model, optimizer, scheduler,
+                                amp if args.fp16 else None)
+                copyfile(path, os.path.join(args.checkpoint_dir, 'checkpoint_last.pt'))
+            if args.dist:
+                dist.barrier()
 
         if args.step_per_valid != 0 and step % args.step_per_valid == 0:
             # Eval on validation data.
@@ -346,8 +347,8 @@ def setup_train(i, corpus, args):
                     dist.barrier()
                 best_loss = validate(best_loss)
 
+        # Saving checkpoint.
         if args.epoch_per_save != 0 and epoch % args.epoch_per_save == 0:
-            # Saving checkpoint.
             if i == 0:
                 path = os.path.join(args.checkpoint_dir, f'checkpoint-{epoch}-{step}.pt')
                 save_checkpoint(path, step, epoch, model, optimizer, scheduler,
@@ -370,6 +371,7 @@ def setup_train(i, corpus, args):
 
         if args.max_epoch is not None and epoch >= args.max_epoch:
             break
+
 
 # The checkpoint stores the optimizer itself, rather than the state_dict.
 # This is to get around the current Apex amp bug with opt_level O2.

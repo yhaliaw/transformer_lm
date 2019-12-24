@@ -26,7 +26,6 @@ class TransformerLanguageModel(nn.Module):
         self.dropout = args.dropout
         self.attn_dropout = args.attn_dropout
         self.num_layer = args.num_layer
-        self.tied_layer = args.tied_layer  # Share all weight between layers
         self.input_cutoff = args.input_cutoff
         self.input_factor = args.input_factor
         self.softmax_cutoff = args.softmax_cutoff
@@ -39,24 +38,17 @@ class TransformerLanguageModel(nn.Module):
         self.position_embedding = SinusoidalPositionalEmbedding(self.model_dim)
 
         # Parameters
+        # Embedding layer
         if args.adaptive_input:
             self.embedding = AdaptiveInput(self.vocab_size, self.model_dim, self.input_cutoff,
                                            self.input_factor, self.padding_idx)
         else:
             self.embedding = TiedEmbedding(self.vocab_size, self.model_dim, self.padding_idx)
-        self.layer = nn.ModuleList([])
-        if self.tied_layer:
-            transformer_layer = TransformerLayer(
-                self.model_dim, self.num_head, self.inner_dim, self.dropout, self.attn_dropout,
-                self.head_dim, self.bias, self.activation
-            )
-            self.layer.extend([transformer_layer for _ in range(self.num_layer)])
-        else:
-            self.layer.extend([
-                TransformerLayer(self.model_dim, self.num_head, self.inner_dim, self.dropout,
-                                 self.attn_dropout, self.head_dim, self.bias, self.activation)
-                for _ in range(self.num_layer)
-            ])
+
+        # Create the transformer stack.
+        self.create_layer()
+
+        # Softmax layer
         if args.adaptive_softmax:
             self.adaptive_softmax_dropout = args.adaptive_softmax_dropout
             self.softmax = AdaptiveSoftmax(self.vocab_size, self.model_dim, self.softmax_cutoff,
@@ -76,6 +68,14 @@ class TransformerLanguageModel(nn.Module):
         if args.tied_embed:
             self.softmax.linear = self.embedding
 
+    def create_layer(self):
+        self.layer = nn.ModuleList([])
+        self.layer.extend([
+            TransformerLayer(self.model_dim, self.num_head, self.inner_dim, self.dropout,
+                             self.attn_dropout, self.head_dim, self.bias, self.activation)
+            for _ in range(self.num_layer)
+        ])
+
     def extract_feature(self, x):
         # x: [seq x batch]
         seq_len, batch_size = x.size()
@@ -85,18 +85,22 @@ class TransformerLanguageModel(nn.Module):
         padding_mask = x.eq(self.padding_idx)
         padding_mask = padding_mask.permute(1, 0)
         if self.self_attn_mask:  # Mask out subsequent positions.
+            # The first token can not be padding.
             # self_attn_mask: [seq x seq]
             self_attn_mask = subsequent_mask(seq_len, x.device)
             # mask: [batch x seq x seq]
-            # The first token can not be padding.
             mask = padding_mask[:, None, :] | self_attn_mask[None, :, :]
         else:
             mask = padding_mask[:, None, :]
         x = self.embedding(x) * (self.model_dim ** 0.5)
         x = x + self.position_embedding(torch.arange(1, seq_len + 1, device=x.device))[:, None, :]
         x = F.dropout(x, self.dropout, training=self.training)
-        for encoder_layer in self.layer:
-            x = encoder_layer(x, mask)
+        x = self.transformer_stack(x, mask)
+        return x
+
+    def transformer_stack(self, x, mask):
+        for transformer_layer in self.layer:
+            x = transformer_layer(x, mask)
         return x
 
     def log_prob(self, x):

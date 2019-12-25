@@ -20,6 +20,7 @@ if [ "$1" == "train" ]; then
     --max-step 300000 \
     --min-lr 1e-9 \
     --clip-norm 0.25 \
+    --arch single_layer_transformer \
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 \
@@ -29,10 +30,8 @@ if [ "$1" == "train" ]; then
     --inner-dim 2048 \
     --dropout 0.1 \
     --activation gelu \
-    --arch recurrent_tree_transformer \
-    --attn-type recurrent_dot_product \
     --cuda --fp16 \
-    --run-name masked_lm_re_tree_layer_12 \
+    --run-name masked_lm_single_layer_12 \
     "${@:2}"
 elif [ "$1" == "eval" ]; then
   echo "Evaluating masked language model on wikitext-103 data..."
@@ -51,10 +50,8 @@ elif [ "$1" == "eval" ]; then
     --inner-dim 2048 \
     --dropout 0.1 \
     --activation gelu \
-    --arch recurrent_tree_transformer \
-    --attn-type recurrent_dot_product \
     --cuda --fp16 \
-    --checkpoint workspace/sent-wiki103/masked_lm_re_tree_layer_12/checkpoint/checkpoint_best.pt \
+    --checkpoint workspace/sent-wiki103/masked_lm_single_layer_12/checkpoint/checkpoint_best.pt \
     "${@:2}"
 else
   echo "Specify 'train' or 'eval'."

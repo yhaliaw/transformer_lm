@@ -36,7 +36,7 @@ elif [ "$1" == "eval" ]; then
   python3 "$ROOT"/eval.py --data data/wikitext-103 --worker 1 \
     --test wiki.test.tokens --valid wiki.valid.tokens --eval-valid \
     --task lm --context-type file \
-    --context-size 1024 --eval-token 1024 --eval-max-token 4096 \
+    --context-size 1024 --eval-token 1024 --eval-max-token 2048 \
     --arch single_layer_transformer \
     --adaptive-input \
     --adaptive-softmax \

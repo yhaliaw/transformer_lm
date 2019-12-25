@@ -39,6 +39,7 @@ elif [ "$1" == "eval" ]; then
     --test wiki.test.tokens --valid wiki.valid.tokens --eval-valid \
     --task lm --context-type file \
     --context-size 1024 --eval-token 1024 --eval-max-token 4096 \
+    --arch single-layer-transformer \
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 200000 \

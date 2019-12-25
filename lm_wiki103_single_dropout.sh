@@ -50,7 +50,7 @@ elif [ "$1" == "eval" ]; then
     --attn-dropout 0.1 \
     --adaptive-softmax-dropout 0.2 \
     --cuda --fp16 \
-    --checkpoint workspace/wiki103/lm_base_layer_12/checkpoint/checkpoint_best.pt \
+    --checkpoint workspace/wiki103/lm_single_dropout_layer_8/checkpoint/checkpoint_best.pt \
     "${@:2}"
 else
   echo "Specify 'train' or 'eval'."

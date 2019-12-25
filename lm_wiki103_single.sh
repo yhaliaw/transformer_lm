@@ -17,7 +17,7 @@ if [ "$1" == "train" ]; then
     --scheduler cosine --step-per-period 300000 --max-step 300000 \
     --min-lr 1e-9 \
     --clip-norm 0.1 \
-    --arch single-layer-transformer \
+    --arch single_layer_transformer \
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 200000 \
@@ -37,7 +37,7 @@ elif [ "$1" == "eval" ]; then
     --test wiki.test.tokens --valid wiki.valid.tokens --eval-valid \
     --task lm --context-type file \
     --context-size 1024 --eval-token 1024 --eval-max-token 4096 \
-    --arch single-layer-transformer \
+    --arch single_layer_transformer \
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 200000 \

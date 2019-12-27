@@ -41,6 +41,7 @@ elif [ "$1" == "eval" ]; then
     --test wiki.test.tokens \
     --task masked_lm --context-type line \
     --eval-token 4096 --eval-max-token 4096 \
+    --arch single_layer_transformer \
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 \

@@ -21,7 +21,7 @@ if [ "$1" == "train" ]; then
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 200000 \
-    --pool_size 1 1 1 3 3 1 1 1 \
+    --pool-size 1 1 1 3 3 1 1 1 \
     --embed-dim 512 \
     --num-head 8 \
     --inner-dim 2048 \

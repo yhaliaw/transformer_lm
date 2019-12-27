@@ -227,6 +227,8 @@ def model_args(parser):
     parser.add_argument('--arch', type=str, default='transformer',
                         choices=['transformer',
                                  'single_layer_transformer',
+                                 'layer_permute_transformer',
+                                 'layer_pool_transformer',
                                  # Old
                                  'tree_transformer',
                                  'original_tree_transformer',
@@ -278,12 +280,20 @@ def model_args(parser):
                         help="Dropout for model.")
     parser.add_argument('--attn-dropout', type=float, default=0.,
                         help="Dropout for attention.")
-
-    # Experiments
     parser.add_argument('--layer-dropout', type=float, default=0.,
                         help="Dropout for each layer.")
+
+    # Experiments
+    # Single layer Transformer (fully weight tied layers)
     parser.add_argument('--eval-num-layer', type=int,
                         help="Number of layers during evaluation.")
+
+    # Layer Permute Transformer, Layer Pool Transformer
+    parser.add_argument('--pool-size', nargs='+', type=int,
+                        help="A list of number of layers in each pool.")
+    # Layer Pool Transformer
+    parser.add_argument('--pool-depth', nargs='+', type=int,
+                        help="The depth to form from each pool of layers.")
 
     # Old Experiments
     parser.add_argument('--attn-type', type=str,

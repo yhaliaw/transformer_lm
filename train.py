@@ -107,7 +107,11 @@ def setup_train(i, corpus, args):
     model.to(args.device)
 
     args.total_param = count_param(model)
-    args.layer_param = count_param(model.layer)
+    if hasattr(model, 'layer_pool'):
+        args.layer_param = sum([count_param(layer) for layer in model.layer_pool])
+    elif hasattr(model, 'layer'):
+        args.layer_param = count_param(model.layer)
+
     string = f"|  Model:\n{model}\n"
     string += f"|  Total parameters: {args.total_param}\n"
     string += f"|  Parameters without embedding and pre-softmax linear: {args.layer_param}"
@@ -376,7 +380,8 @@ def setup_train(i, corpus, args):
 # The checkpoint stores the optimizer itself, rather than the state_dict.
 # This is to get around the current Apex amp bug with opt_level O2.
 # Without it resuming training will see a massive increase in loss.
-# It is unsure what is root cause, but it is likely the _amp_stash in optimizer.
+# It is unsure what is root cause, but it is likely the _amp_stash in
+# optimizer, or the Apex Fused Optimizer.
 def save_checkpoint(path, step, epoch, model, optimizer=None, scheduler=None, amp=None):
     if isinstance(model, DistributedDataParallel):
         model = model.module

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from modules.layer_dropout import layer_dropout
 from modules.activation import gelu
 from modules.positional_embedding import SinusoidalPositionalEmbedding
 from modules.transformer_layer import TransformerLayer
@@ -34,6 +35,7 @@ class TransformerLanguageModel(nn.Module):
         # No masked self attention for masked language model.
         self.self_attn_mask = False if args.task == 'masked_lm' else True
         self.bias = True
+        self.layer_dropout = args.layer_dropout
 
         self.position_embedding = SinusoidalPositionalEmbedding(self.model_dim)
 
@@ -45,7 +47,7 @@ class TransformerLanguageModel(nn.Module):
         else:
             self.embedding = TiedEmbedding(self.vocab_size, self.model_dim, self.padding_idx)
 
-        # Create the transformer stack.
+        # Create the transformer layer stack.
         self.create_layer()
 
         # Softmax layer
@@ -100,7 +102,7 @@ class TransformerLanguageModel(nn.Module):
 
     def transformer_stack(self, x, mask):
         for transformer_layer in self.layer:
-            x = transformer_layer(x, mask)
+            x = layer_dropout(transformer_layer, self.layer_dropout, x, mask)
         return x
 
     def log_prob(self, x):

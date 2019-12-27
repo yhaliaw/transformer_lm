@@ -85,20 +85,21 @@ def main():
         progress.close()
         return total_loss / total_target
 
-    if args.eval_valid:
-        print("|  Evaluating model on validation data...")
-        valid_loader = get_eval_loader(corpus.valid, corpus.vocab, args)
-        loss = evaluate(valid_loader)
-        loss = loss / math.log(2)
-        print(f"|  valid loss: {loss:.4f}")
-        print(f"\n== Valid perplexity: {2 ** loss:.4f} ==\n")
+    with torch.no_grad():
+        if args.eval_valid:
+            print("|  Evaluating model on validation data...")
+            valid_loader = get_eval_loader(corpus.valid, corpus.vocab, args)
+            loss = evaluate(valid_loader)
+            loss = loss / math.log(2)
+            print(f"|  valid loss: {loss:.4f}")
+            print(f"\n== Valid perplexity: {2 ** loss:.4f} ==\n")
 
-    print("|  Evaluating model on test data...")
-    test_loader = get_eval_loader(corpus.test, corpus.vocab, args)
-    loss = evaluate(test_loader)
-    loss = loss / math.log(2)
-    print(f"|  test loss: {loss:.4f}")
-    print(f"\n== Test perplexity: {2 ** loss:.4f} ==\n")
+        print("|  Evaluating model on test data...")
+        test_loader = get_eval_loader(corpus.test, corpus.vocab, args)
+        loss = evaluate(test_loader)
+        loss = loss / math.log(2)
+        print(f"|  test loss: {loss:.4f}")
+        print(f"\n== Test perplexity: {2 ** loss:.4f} ==\n")
 
 
 def valid_options(args):

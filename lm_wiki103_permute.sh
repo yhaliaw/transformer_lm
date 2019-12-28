@@ -21,15 +21,16 @@ if [ "$1" == "train" ]; then
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 200000 \
-    --pool-size 1 1 1 3 3 1 1 1 \
+    --pool-size 1 1 1 6 1 1 1 \
     --embed-dim 512 \
     --num-head 8 \
     --inner-dim 2048 \
     --dropout 0.2 \
     --attn-dropout 0.1 \
+    --layer-dropout 0.2 \
     --adaptive-softmax-dropout 0.2 \
     --cuda --fp16 \
-    --run-name lm_permute_layer_3_3 \
+    --run-name lm_permute_6_layer_12 \
     "${@:2}"
 elif [ "$1" == "eval" ]; then
   echo "Evaluating masked language model on wikitext-103 data..."
@@ -41,15 +42,16 @@ elif [ "$1" == "eval" ]; then
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 200000 \
-    --pool-size 1 1 1 3 3 1 1 1 \
+    --pool-size 1 1 1 6 1 1 1 \
     --embed-dim 512 \
     --num-head 8 \
     --inner-dim 2048 \
     --dropout 0.1 \
     --attn-dropout 0.1 \
+    --layer-dropout 0.2 \
     --adaptive-softmax-dropout 0.2 \
     --cuda --fp16 \
-    --checkpoint workspace/wiki103/lm_permute_layer_3_3/checkpoint/checkpoint_best.pt \
+    --checkpoint workspace/wiki103/lm_permute_6_layer_12/checkpoint/checkpoint_best.pt \
     "${@:2}"
 else
   echo "Specify 'train' or 'eval'."

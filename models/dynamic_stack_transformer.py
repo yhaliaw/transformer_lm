@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.layer_dropout import layer_dropout
 from modules.transformer_layer import TransformerLayer
 from models.transformer_lm import TransformerLanguageModel
 
@@ -23,12 +22,12 @@ class SingleLayerTransformer(TransformerLanguageModel):
     def create_layer(self):
         self.layer = TransformerLayer(
             self.model_dim, self.num_head, self.inner_dim, self.dropout, self.attn_dropout,
-            self.head_dim, self.bias, self.activation
+            self.layer_dropout, self.head_dim, self.bias, self.activation
         )
 
     def transformer_stack(self, x, mask):
         for i in range(self.num_layer):
-            x = layer_dropout(self.layer, self.layer_dropout, x, mask)
+            x = self.layer(x, mask)
         return x
 
 
@@ -42,8 +41,9 @@ class LayerPermuteTransformer(TransformerLanguageModel):
         self.layer = nn.ModuleList([nn.ModuleList([]) for _ in range(len(self.pool_size))])
         for i in range(len(self.pool_size)):
             self.layer[i].extend([
-                TransformerLayer(self.model_dim, self.num_head, self.inner_dim, self.dropout,
-                                 self.attn_dropout, self.head_dim, self.bias, self.activation)
+                TransformerLayer(
+                    self.model_dim, self.num_head, self.inner_dim, self.dropout, self.attn_dropout,
+                    self.layer_dropout, self.head_dim, self.bias, self.activation)
                 for _ in range(self.pool_size[i])
             ])
 
@@ -55,7 +55,7 @@ class LayerPermuteTransformer(TransformerLanguageModel):
                 order = list(range(self.pool_size[i]))
 
             for idx in order:
-                x = layer_dropout(self.layer[i][idx], self.layer_dropout, x, mask)
+                x = self.layer[i][idx](x, mask)
         return x
 
 

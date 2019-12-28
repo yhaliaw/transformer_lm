@@ -38,14 +38,15 @@ class TransformerLayer(nn.Module):
     See "Attention is all you need" for details:
     https://arxiv.org/abs/1706.03762
     """
-    def __init__(self, model_dim, num_head, inner_dim, dropout, attn_dropout=0., head_dim=None,
-                 bias=True, activation=F.relu):
+    def __init__(self, model_dim, num_head, inner_dim, dropout, attn_dropout=0., layer_dropout=0.,
+                 head_dim=None, bias=True, activation=F.relu):
         super().__init__()
         self.model_dim = model_dim
         self.num_head = num_head
         self.inner_dim = inner_dim
         self.dropout = dropout
         self.attn_dropout = attn_dropout
+        self.layer_dropout = layer_dropout
         self.head_dim = head_dim
         self.bias = bias
         self.activation = activation
@@ -61,9 +62,12 @@ class TransformerLayer(nn.Module):
         self.position_wise = Sublayer(position_wise, model_dim, dropout)
 
     def forward(self, x, self_attn_mask=None):
-        x = self.self_attn(x, attn_mask=self_attn_mask)
-        x = self.position_wise(x)
-        return x
+        if self.training and torch.rand(1)[0] < self.layer_dropout:
+            return x
+        else:
+            x = self.self_attn(x, attn_mask=self_attn_mask)
+            x = self.position_wise(x)
+            return x
 
 
 class Sublayer(nn.Module):

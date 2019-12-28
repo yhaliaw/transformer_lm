@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from modules.layer_dropout import layer_dropout
 from modules.activation import gelu
 from modules.positional_embedding import SinusoidalPositionalEmbedding
 from modules.transformer_layer import TransformerLayer
@@ -73,8 +72,10 @@ class TransformerLanguageModel(nn.Module):
     def create_layer(self):
         self.layer = nn.ModuleList([])
         self.layer.extend([
-            TransformerLayer(self.model_dim, self.num_head, self.inner_dim, self.dropout,
-                             self.attn_dropout, self.head_dim, self.bias, self.activation)
+            TransformerLayer(
+                self.model_dim, self.num_head, self.inner_dim, self.dropout, self.attn_dropout,
+                self.layer_dropout, self.head_dim, self.bias, self.activation
+            )
             for _ in range(self.num_layer)
         ])
 
@@ -102,7 +103,7 @@ class TransformerLanguageModel(nn.Module):
 
     def transformer_stack(self, x, mask):
         for transformer_layer in self.layer:
-            x = layer_dropout(transformer_layer, self.layer_dropout, x, mask)
+            x = transformer_layer(x, mask)
         return x
 
     def log_prob(self, x):

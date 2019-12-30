@@ -17,19 +17,20 @@ if [ "$1" == "train" ]; then
     --scheduler cosine --step-per-period 300000 --max-step 300000 \
     --min-lr 1e-9 \
     --clip-norm 0.1 \
-    --arch layer_permute_transformer \
+    --arch shared_layer_transformer \
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 200000 \
-    --pool-size 3 3 3 3 \
+    --pool-depth 4 4 4 4 \
     --embed-dim 512 \
     --num-head 8 \
     --inner-dim 2048 \
     --dropout 0.2 \
     --attn-dropout 0.1 \
     --adaptive-softmax-dropout 0.2 \
+    --layer-dropout 0.25 \
     --cuda --fp16 \
-    --run-name lm_permute_3_3_3_3 \
+    --run-name lm_shared_layer_4_4_4_4_layerdrop_0.25 \
     "${@:2}"
 elif [ "$1" == "eval" ]; then
   echo "Evaluating masked language model on wikitext-103 data..."
@@ -37,11 +38,11 @@ elif [ "$1" == "eval" ]; then
     --test wiki.test.tokens --valid wiki.valid.tokens --eval-valid \
     --task lm --context-type file \
     --context-size 512 --eval-token 512 --eval-max-token 2048 \
-    --arch layer_permute_transformer \
+    --arch shared_layer_transformer \
     --adaptive-input \
     --adaptive-softmax \
     --cutoff 20000 40000 200000 \
-    --pool-size 1 1 1 3 3 1 1 1 \
+    --pool-depth 3 3 3 3 \
     --embed-dim 512 \
     --num-head 8 \
     --inner-dim 2048 \
@@ -49,7 +50,7 @@ elif [ "$1" == "eval" ]; then
     --attn-dropout 0.1 \
     --adaptive-softmax-dropout 0.2 \
     --cuda --fp16 \
-    --checkpoint workspace/wiki103/lm_permute_3_3_3_3/checkpoint/checkpoint_best.pt \
+    --checkpoint workspace/wiki103/lm_shared_layer_4_4_4_4_layerdrop_0.25/checkpoint/checkpoint_best.pt \
     "${@:2}"
 else
   echo "Specify 'train' or 'eval'."

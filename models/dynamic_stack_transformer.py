@@ -16,7 +16,6 @@ class SingleLayerTransformer(TransformerLanguageModel):
     """
 
     def __init__(self, vocab, args):
-        self.eval_num_layer = args.num_layer if args.eval_num_layer is None else args.eval_num_layer
         super().__init__(vocab=vocab, args=args)
 
     def create_layer(self):
@@ -31,10 +30,33 @@ class SingleLayerTransformer(TransformerLanguageModel):
         return x
 
 
+class SharedLayerTransformer(TransformerLanguageModel):
+
+    def __init__(self, vocab, args):
+        self.pool_depth = args.pool_depth
+        super().__init__(vocab=vocab, args=args)
+
+    def create_layer(self):
+        self.layer = nn.ModuleList([])
+        self.layer.extend([
+            TransformerLayer(
+                self.model_dim, self.num_head, self.inner_dim, self.dropout, self.attn_dropout,
+                self.layer_dropout, self.head_dim, self.bias, self.activation)
+            for _ in range(len(self.pool_depth))
+        ])
+
+    def transformer_stack(self, x, mask):
+        for transformer_layer, depth in zip(self.layer, self.pool_depth):
+            for _ in range(depth):
+                x = transformer_layer(x, mask)
+        return x
+
+
 class LayerPermuteTransformer(TransformerLanguageModel):
 
     def __init__(self, vocab, args):
         self.pool_size = args.pool_size
+        self.permute_ensemble = args.permute_ensemble
         super().__init__(vocab=vocab, args=args)
 
     def create_layer(self):
@@ -43,11 +65,15 @@ class LayerPermuteTransformer(TransformerLanguageModel):
             self.layer[i].extend([
                 TransformerLayer(
                     self.model_dim, self.num_head, self.inner_dim, self.dropout, self.attn_dropout,
-                    self.layer_dropout, self.head_dim, self.bias, self.activation)
+                    self.layer_dropout, self.head_dim, self.bias, self.activation
+                )
                 for _ in range(self.pool_size[i])
             ])
 
     def transformer_stack(self, x, mask):
+        if not self.training and self.permute_ensemble:
+            return self.ensemble_stack(x, mask)
+
         for i in range(len(self.pool_size)):
             if self.training:
                 order = torch.randperm(self.pool_size[i])
@@ -57,6 +83,24 @@ class LayerPermuteTransformer(TransformerLanguageModel):
             for idx in order:
                 x = self.layer[i][idx](x, mask)
         return x
+
+    def ensemble_stack(self, x, mask):
+        with torch.no_grad():
+            ensemble_layer = TransformerLayer(
+                self.model_dim, self.num_head, self.inner_dim, self.dropout, self.attn_dropout,
+                self.layer_dropout, self.head_dim, self.bias, self.activation
+            )
+            for layer_pool in self.layer:
+                size = len(layer_pool)
+                # TODO
+        raise NotImplementedError
+
+
+
+
+
+
+
 
 
 class LayerPoolTransformer(TransformerLanguageModel):

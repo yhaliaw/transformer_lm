@@ -1,5 +1,7 @@
 from .transformer_lm import TransformerLanguageModel
-from .dynamic_stack_transformer import SingleLayerTransformer, LayerPermuteTransformer, LayerPoolTransformer
+from .dynamic_stack_transformer import (
+    SingleLayerTransformer, LayerPermuteTransformer, LayerPoolTransformer, SharedLayerTransformer
+)
 from .tree_transformer import TreeTransformer, OriginalTreeTransformer, RecurrentTreeTransformer
 
 
@@ -8,6 +10,8 @@ def get_model(vocab, args):
         model = TransformerLanguageModel(vocab=vocab, args=args)
     elif args.arch == 'single_layer_transformer':
         model = SingleLayerTransformer(vocab=vocab, args=args)
+    elif args.arch == 'shared_layer_transformer':
+        model = SharedLayerTransformer(vocab=vocab, args=args)
     elif args.arch == 'layer_permute_transformer':
         model = LayerPermuteTransformer(vocab=vocab, args=args)
     elif args.arch == 'layer_pool_transformer':

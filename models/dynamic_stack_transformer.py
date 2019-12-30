@@ -57,6 +57,10 @@ class LayerPermuteTransformer(TransformerLanguageModel):
     def __init__(self, vocab, args):
         self.pool_size = args.pool_size
         self.permute_ensemble = args.permute_ensemble
+        self.permute_random = args.permute_random
+        self.permute_order = args.permute_order
+        if self.permute_order is not None:
+            self.permute_order = list(map(lambda x: [int(i) for i in x.split(',')], self.permute_order))
         super().__init__(vocab=vocab, args=args)
 
     def create_layer(self):
@@ -75,8 +79,10 @@ class LayerPermuteTransformer(TransformerLanguageModel):
             return self.ensemble_stack(x, mask)
 
         for i in range(len(self.pool_size)):
-            if self.training:
+            if self.training or self.permute_random:
                 order = torch.randperm(self.pool_size[i])
+            elif self.permute_order is not None:
+                order = self.permute_order[i]
             else:
                 order = list(range(self.pool_size[i]))
 
@@ -89,11 +95,15 @@ class LayerPermuteTransformer(TransformerLanguageModel):
             ensemble_layer = TransformerLayer(
                 self.model_dim, self.num_head, self.inner_dim, self.dropout, self.attn_dropout,
                 self.layer_dropout, self.head_dim, self.bias, self.activation
-            )
+            ).to(x.device).type(x.dtype)
             for layer_pool in self.layer:
-                size = len(layer_pool)
-                # TODO
-        raise NotImplementedError
+                num = len(layer_pool)
+                state_dict = list(map(lambda x: dict(x.named_parameters()), layer_pool))
+                for name, param in ensemble_layer.named_parameters():
+                    param = sum(map(lambda x: x[name], state_dict)) / num  # average
+                for _ in range(num):
+                    x = ensemble_layer(x, mask)
+        return x
 
 
 

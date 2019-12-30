@@ -293,8 +293,13 @@ def model_args(parser):
     # Shared Layer Transformer, Layer Pool Transformer
     parser.add_argument('--pool-depth', nargs='+', type=int,
                         help="The depth to form from each pool of layers.")
+    parser.add_argument('--permute-random', action='store_true',
+                        help="Random the permute layers order during evaluation.")
     parser.add_argument('--permute-ensemble', action='store_true',
-                        help="Ensemble the permuted layers during evaluation.")
+                        help="Ensemble the permute layers during evaluation.")
+    parser.add_argument('--permute-order', nargs='+', type=str,
+                        help="Order of permute layers during evaluation, use ',' to delimit the "
+                             "order with no space within the same group.")
 
     # Old Experiments
     parser.add_argument('--attn-type', type=str,

@@ -16,7 +16,7 @@ if [ "$1" == "train" ]; then
     --warmup-step 0 \
     --scheduler cosine --step-per-period 300000 --max-step 300000 \
     --min-lr 1e-9 \
-    --clip-norm 0.1 \
+    --clip-norm 0.25 \
     --arch single_layer_transformer \
     --adaptive-input \
     --adaptive-softmax \
